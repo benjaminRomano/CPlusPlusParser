@@ -1,4 +1,9 @@
 package org.bromano.cplusplusparser.scanner;
 
-public class Scanner {
+import java.util.List;
+
+public interface Scanner {
+    Token scan();
+    List<Token> lex();
+    void setText(String text);
 }

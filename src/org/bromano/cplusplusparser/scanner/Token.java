@@ -5,6 +5,11 @@ public class Token {
     public String lexeme;
     //TODO: Add line number and position?
 
+    public Token(TokenKind kind) {
+        this.kind = kind;
+        this.lexeme = null;
+    }
+
     public Token(TokenKind kind, String lexeme) {
         this.kind = kind;
         this.lexeme = lexeme;
@@ -12,6 +17,6 @@ public class Token {
 
     @Override
     public String toString() {
-        return TokenKind.Ampersand.name() + " " + lexeme;
+        return this.kind.name() + " " + this.lexeme;
     }
 }
