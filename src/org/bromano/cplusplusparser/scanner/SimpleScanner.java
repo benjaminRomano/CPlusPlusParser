@@ -24,30 +24,8 @@ public class SimpleScanner implements Scanner {
         this.end = text.length();
     }
 
-//    private boolean isAMatch(int pos, char[] chars) {
-//        if(pos >= end) {
-//            return false;
-//        }
-//
-//        char currChar = text.charAt(pos);
-//        for(char ch : chars) {
-//            if(currChar == ch) {
-//                return true;
-//            }
-//        }
-//
-//        return false;
-//    }
-
-    private boolean isAMatch(int pos, char ch) {
-        if(pos >= end || text.charAt(pos) != ch) {
-            return false;
-        }
-
-        return true;
-    }
-
-    public boolean isAMatch(int startPos, int endPos, String sequence) {
+    public boolean isAMatch(int startPos, String sequence) {
+        int endPos = pos + sequence.length();
         if(startPos >= end || endPos > end) {
             return false;
         }
@@ -74,7 +52,7 @@ public class SimpleScanner implements Scanner {
                     continue;
                 case '!':
                     pos++;
-                    if(isAMatch(pos, '=')) {
+                    if(isAMatch(pos, "=")) {
                         pos++;
                         return new Token(TokenKind.ExclamationEquals);
                     }
@@ -85,23 +63,23 @@ public class SimpleScanner implements Scanner {
                 case '#':
                     while(pos < end) {
                         pos++;
-                        if(isAMatch(pos, '\n')) {
+                        if(isAMatch(pos, "\n")) {
                             continue;
                         }
                     }
                     continue;
                 case '%':
                     pos++;
-                    if(isAMatch(pos, pos + 3, ":%:")) {
+                    if(isAMatch(pos, ":%:")) {
                         pos += 3;
                         return new Token(TokenKind.PercentColonPercentColen);
-                    } else if(isAMatch(pos, ':')) {
+                    } else if(isAMatch(pos, ":")) {
                         pos++;
                         return new Token(TokenKind.PercentColon);
-                    } else if(isAMatch(pos, '=')) {
+                    } else if(isAMatch(pos, "=")) {
                         pos++;
                         return new Token(TokenKind.PercentEquals);
-                    } else if(isAMatch(pos, '>')) {
+                    } else if(isAMatch(pos, ">")) {
                         pos++;
                         return new Token(TokenKind.PercentGreaterThan);
                     }
@@ -109,14 +87,16 @@ public class SimpleScanner implements Scanner {
                     return new Token(TokenKind.Percent);
                 case '&':
                     pos++;
-                    if(isAMatch(pos, '=')) {
+                    if(isAMatch(pos, "=")) {
                         pos++;
                         return new Token(TokenKind.AmpersandEquals);
-                    } else if(isAMatch(pos, '&')) {
+                    } else if(isAMatch(pos, "&")) {
                         pos++;
                         return new Token(TokenKind.AmpersandAmpersand);
                     }
                     return new Token(TokenKind.Ampersand);
+                case '\'':
+                    throw new NotImplementedException();
                 case '(':
                     pos++;
                     return new Token(TokenKind.OpenParen);
@@ -125,17 +105,17 @@ public class SimpleScanner implements Scanner {
                     return new Token(TokenKind.CloseParen);
                 case '*':
                     pos++;
-                    if(isAMatch(pos, '=')) {
+                    if(isAMatch(pos, "=")) {
                         pos++;
                         return new Token(TokenKind.AsteriskEquals);
                     }
                     return new Token(TokenKind.Asterisk);
                 case '+':
                     pos++;
-                    if(isAMatch(pos, '=')) {
+                    if(isAMatch(pos, "=")) {
                         pos++;
                         return new Token(TokenKind.PlusEquals);
-                    } else if(isAMatch(pos, '+')) {
+                    } else if(isAMatch(pos, "+")) {
                         pos++;
                         return new Token(TokenKind.PlusPlus);
                     }
@@ -146,16 +126,16 @@ public class SimpleScanner implements Scanner {
                     return new Token(TokenKind.Comma);
                 case '-':
                     pos++;
-                    if(isAMatch(pos, pos+2, ">*")) {
+                    if(isAMatch(pos, ">*")) {
                         pos += 2;
                         return new Token(TokenKind.MinusGreaterThanAsterisk);
-                    } else if(isAMatch(pos, '=')) {
+                    } else if(isAMatch(pos, "=")) {
                         pos++;
-                        return new Token(TokenKind.Minus);
-                    } else if(isAMatch(pos, '>')) {
+                        return new Token(TokenKind.MinusEquals);
+                    } else if(isAMatch(pos, ">")) {
                         pos++;
                         return new Token(TokenKind.MinusGreaterThan);
-                    } else if(isAMatch(pos, '-')) {
+                    } else if(isAMatch(pos, "-")) {
                         pos++;
                         return new Token(TokenKind.MinusMinus);
                     }
@@ -163,10 +143,10 @@ public class SimpleScanner implements Scanner {
                     return new Token(TokenKind.Minus);
                 case '.':
                     pos++;
-                    if(isAMatch(pos, pos+2, "..")) {
+                    if(isAMatch(pos, "..")) {
                         pos += 2;
                         return new Token(TokenKind.DotDotDot);
-                    } else if(isAMatch(pos, '*')) {
+                    } else if(isAMatch(pos, "*")) {
                         pos++;
                         return new Token(TokenKind.DotAsterisk);
                     }
@@ -174,7 +154,7 @@ public class SimpleScanner implements Scanner {
                     return new Token(TokenKind.Dot);
                 case '/':
                     pos++;
-                    if(isAMatch(pos, '=')) {
+                    if(isAMatch(pos, "=")) {
                         pos++;
                         return new Token(TokenKind.SlashEquals);
                     }
@@ -182,10 +162,10 @@ public class SimpleScanner implements Scanner {
                     return new Token(TokenKind.Slash);
                 case ':':
                     pos++;
-                    if(isAMatch(pos, ':')) {
+                    if(isAMatch(pos, ":")) {
                         pos++;
                         return new Token(TokenKind.ColonColon);
-                    } else if(isAMatch(pos, '>')) {
+                    } else if(isAMatch(pos, ">")) {
                         pos++;
                         return new Token(TokenKind.ColonGreaterThan);
                     }
@@ -195,25 +175,88 @@ public class SimpleScanner implements Scanner {
                     pos++;
                     return new Token(TokenKind.Semicolon);
                 case '<':
-                    //TODO: Make sure to finish this
                     pos++;
+
+                    if(isAMatch(pos, "<=")) {
+                        pos += 2;
+                        return new Token(TokenKind.LessThanLessThanEquals);
+                    } else if(isAMatch(pos, "<")) {
+                        pos++;
+                        return new Token(TokenKind.LessThanLessThan);
+                    } else if(isAMatch(pos, "=")) {
+                        pos++;
+                        return new Token(TokenKind.LessThanEquals);
+                    } else if(isAMatch(pos, ":")) {
+                        pos++;
+                        return new Token(TokenKind.LessThanColon);
+                    } else if(isAMatch(pos, "%")) {
+                        pos++;
+                        return new Token(TokenKind.LessThanPercent);
+                    }
+
                     return new Token(TokenKind.LessThan);
+                case '=':
+                    pos++;
+                    if(isAMatch(pos, "=")) {
+                        pos++;
+                        return new Token(TokenKind.EqualsEquals);
+                    }
+                    return new Token(TokenKind.Equals);
+                case '>':
+                    pos++;
+                    if(isAMatch(pos, ">=")) {
+                        pos += 2;
+                        return new Token(TokenKind.GreaterThanGreaterThanEquals);
+                    } else if(isAMatch(pos, ">")) {
+                        pos++;
+                        return new Token(TokenKind.GreaterThanGreaterThan);
+                    } else if(isAMatch(pos, "=")) {
+                        pos++;
+                        return new Token(TokenKind.GreaterThanEquals);
+                    }
+
+                    return new Token(TokenKind.GreaterThan);
+                case '?':
+                    pos++;
+                    return new Token(TokenKind.Question);
                 case '[':
                     pos++;
                     return new Token(TokenKind.OpenBracket);
+                case '\\':
+                    throw new NotImplementedException();
                 case ']':
                     pos++;
                     return new Token(TokenKind.CloseBracket);
+                case '^':
+                    pos++;
+                    if(isAMatch(pos, "=")) {
+                        pos++;
+                        return new Token(TokenKind.CaretEquals);
+                    }
+                    return new Token(TokenKind.Caret);
+                case '_':
+                    throw new NotImplementedException();
                 case '{':
                     pos++;
                     return new Token(TokenKind.OpenBrace);
+                case '|':
+                    pos++;
+                    if(isAMatch(pos, "|")) {
+                       pos++;
+                        return new Token(TokenKind.BarBar);
+                    } else if(isAMatch(pos, "=")) {
+                        pos++;
+                        return new Token(TokenKind.BarEquals);
+                    }
+                    return new Token(TokenKind.Bar);
                 case '}':
                     pos++;
                     return new Token(TokenKind.CloseBrace);
-                default:
+                case '~':
                     pos++;
-                    //TODO: If char doesn't match a tokenKind throw error
-                    continue;
+                    return new Token(TokenKind.Tilde);
+                default:
+                    throw new NotImplementedException();
             }
         }
     }

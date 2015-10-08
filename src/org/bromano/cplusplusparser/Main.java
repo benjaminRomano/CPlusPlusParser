@@ -2,7 +2,6 @@ package org.bromano.cplusplusparser;
 import org.bromano.cplusplusparser.scanner.*;
 
 import java.io.*;
-import java.security.InvalidParameterException;
 import java.util.List;
 
 public class Main {
@@ -14,9 +13,6 @@ public class Main {
             scanner.setText(loadFile(args[0]));
             printTokens(scanner.lex());
         }
-
-        scanner.setText("*=**!=!%:% %: %:%=%>+++=--->*->:::>//=.....*..**=()&=&");
-        printTokens(scanner.lex());
     }
 
     public static void printTokens(List<Token> tokens) {

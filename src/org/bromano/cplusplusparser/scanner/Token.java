@@ -19,4 +19,17 @@ public class Token {
     public String toString() {
         return this.kind.name() + " " + this.lexeme;
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if(obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        Token token = (Token) obj;
+        if(token.kind != this.kind || token.lexeme != this.lexeme) {
+            return false;
+        }
+        return true;
+
+    }
 }
