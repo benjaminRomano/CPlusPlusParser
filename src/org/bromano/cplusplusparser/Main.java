@@ -10,12 +10,12 @@ public class Main {
     public static void main(String[] args) {
         Scanner scanner = new SimpleScanner();
 
-//        if(args.length >= 1) {
-//            scanner.setText(loadFile(args[0]));
-//            printTokens(scanner.lex());
-//        }
+        if(args.length >= 1) {
+            scanner.setText(loadFile(args[0]));
+            printTokens(scanner.lex());
+        }
 
-        scanner.setText("test");
+        scanner.setText("*=**!=!%:% %: %:%=%>+++=--->*->:::>//=.....*..**=()&=&");
         printTokens(scanner.lex());
     }
 
