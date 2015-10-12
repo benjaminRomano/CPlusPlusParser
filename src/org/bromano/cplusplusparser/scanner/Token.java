@@ -26,7 +26,10 @@ public class Token {
             return false;
         }
         Token token = (Token) obj;
-        if(token.kind != this.kind || token.lexeme != this.lexeme) {
+        if(token.kind != this.kind
+                || (token.lexeme != null && this.lexeme == null)
+                || (token.lexeme == null && this.lexeme != null)
+                || (token.lexeme != null && this.lexeme != null && !token.lexeme.equals(this.lexeme))) {
             return false;
         }
         return true;

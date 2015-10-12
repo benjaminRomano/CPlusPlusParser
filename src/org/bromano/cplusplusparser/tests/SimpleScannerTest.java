@@ -10,7 +10,7 @@ import static org.junit.Assert.*;
 public class SimpleScannerTest {
 
     @org.junit.Test
-    public void testScan() throws Exception {
+    public void testLex() throws Exception {
         Scanner s = new SimpleScanner();
 
         //White space
@@ -148,11 +148,48 @@ public class SimpleScannerTest {
                 new Token(TokenKind.Bar),
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
-    }
 
-    @org.junit.Test
-    public void testLex() throws Exception {
+        //Testing hexadecimal integer literals
+        s.setText("0xBu 0xBul 0xBull 0xBuL 0xBuLL 0xBU 0xBUl 0xBUll 0xBUL 0xBULL 0xABCDEF0123456789");
+        assertTokensMatch(new Token[]{
+                new Token(TokenKind.IntegerLiteral, "0xBu"),
+                new Token(TokenKind.IntegerLiteral, "0xBul"),
+                new Token(TokenKind.IntegerLiteral, "0xBull"),
+                new Token(TokenKind.IntegerLiteral, "0xBuL"),
+                new Token(TokenKind.IntegerLiteral, "0xBuLL"),
+                new Token(TokenKind.IntegerLiteral, "0xBU"),
+                new Token(TokenKind.IntegerLiteral, "0xBUl"),
+                new Token(TokenKind.IntegerLiteral, "0xBUll"),
+                new Token(TokenKind.IntegerLiteral, "0xBUL"),
+                new Token(TokenKind.IntegerLiteral, "0xBULL"),
+                new Token(TokenKind.IntegerLiteral, "0xABCDEF0123456789"),
+                new Token(TokenKind.EndOfFile)
+        }, s.lex());
 
+        //Testing octal integer literals
+        s.setText("07u 07ul 07ull 07uL 07uLL 07U 07Ul 07Ull 07UL 07ULL 0 01234567");
+        assertTokensMatch(new Token[]{
+                new Token(TokenKind.IntegerLiteral, "07u"),
+                new Token(TokenKind.IntegerLiteral, "07ul"),
+                new Token(TokenKind.IntegerLiteral, "07ull"),
+                new Token(TokenKind.IntegerLiteral, "07uL"),
+                new Token(TokenKind.IntegerLiteral, "07uLL"),
+                new Token(TokenKind.IntegerLiteral, "07U"),
+                new Token(TokenKind.IntegerLiteral, "07Ul"),
+                new Token(TokenKind.IntegerLiteral, "07Ull"),
+                new Token(TokenKind.IntegerLiteral, "07UL"),
+                new Token(TokenKind.IntegerLiteral, "07ULL"),
+                new Token(TokenKind.IntegerLiteral, "0"),
+                new Token(TokenKind.IntegerLiteral, "01234567"),
+                new Token(TokenKind.EndOfFile)
+        }, s.lex());
+
+        try {
+            s.setText("0x");
+            s.lex();
+        } catch(RuntimeException e) {
+            Assert.assertEquals("Expected hexadecimal digit", e.getMessage());
+        }
     }
 
     private void assertTokensMatch(Token[] expected, List<Token> actual) {

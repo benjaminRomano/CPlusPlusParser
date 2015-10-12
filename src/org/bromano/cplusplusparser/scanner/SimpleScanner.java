@@ -2,6 +2,7 @@ package org.bromano.cplusplusparser.scanner;
 
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,6 +23,26 @@ public class SimpleScanner implements Scanner {
         this.text = text;
         this.pos = 0;
         this.end = text.length();
+    }
+
+    private void error(String message) {
+        throw new RuntimeException(message);
+    }
+
+    public boolean isAMatch(int pos, char[] chars) {
+        if(pos >= end) {
+            return false;
+        }
+
+        char currChar = text.charAt(pos);
+
+        for(char ch : chars) {
+            if(ch == currChar) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public boolean isAMatch(int startPos, String sequence) {
@@ -255,12 +276,112 @@ public class SimpleScanner implements Scanner {
                 case '~':
                     pos++;
                     return new Token(TokenKind.Tilde);
+                case '0':
+                    pos++;
+                    String value = "0";
+                    if(isAMatch(pos, "x") || isAMatch(pos, "X")) {
+                        value += text.charAt(pos);
+                        pos++;
+
+                        String hexDigits = scanHexDigits(1, true);
+                        if(hexDigits == "") {
+                            error("Expected hexadecimal digit");
+                        }
+
+                        value += hexDigits + scanIntegerSuffix();
+
+                        return new Token(TokenKind.IntegerLiteral, value);
+                    } else if(isOctalDigit(text.charAt(pos))) {
+                        value += scanOctal() + scanIntegerSuffix();
+                        return new Token(TokenKind.IntegerLiteral, value);
+                    }
+
+                    return new Token(TokenKind.IntegerLiteral, value);
                 default:
-                    throw new NotImplementedException();
+                    error("Cannot parse token");
             }
         }
     }
 
+    private String scanOctal() {
+        StringBuilder sb = new StringBuilder();
+        while(pos < end) {
+            char ch = text.charAt(pos);
+            if(!isOctalDigit(ch)) {
+                break;
+            }
+            sb.append(ch);
+            pos++;
+        }
+        return sb.toString();
+    }
+
+    private boolean isHexDigit(char ch) {
+        if((ch >= '0' && ch <= '9')
+                || (ch >= 'A' && ch <= 'F')
+                || (ch >= 'a' && ch <= 'f')) {
+           return true;
+        }
+
+        return false;
+    }
+
+    private boolean isOctalDigit(char ch) {
+        if(ch >= '0' && ch <= '7') {
+            return true;
+        }
+        return false;
+    }
+
+    private String scanHexDigits(int minCount, boolean scanAsManyAsPossible) {
+        StringBuilder sb = new StringBuilder();
+        while(pos < end && (sb.length() < minCount || scanAsManyAsPossible)) {
+            char ch = text.charAt(pos);
+
+            if(!isHexDigit(ch)) {
+                break;
+            }
+
+            sb.append(ch);
+            pos++;
+        }
+
+        if(sb.length() < minCount) {
+            return "";
+        }
+
+        return sb.toString();
+    }
+
+    private String scanIntegerSuffix() {
+        if(pos >= end) {
+            return "";
+        }
+
+        int startPos = pos;
+
+        if(isAMatch(pos, new char[] { 'u', 'U'})) {
+            pos++;
+            if(isAMatch(pos, "ll") || isAMatch(pos, "LL")) {
+                pos += 2;
+            } else if(isAMatch(pos, new char[] { 'l', 'L'})) {
+                pos++;
+            }
+
+        } else if(isAMatch(pos, "ll") || isAMatch(pos, "LL")) {
+            pos += 2;
+            if(isAMatch(pos, new char[] { 'u', 'U'})) {
+                pos++;
+            }
+
+        } else if(isAMatch(pos, new char[]{ 'l', 'L'})) {
+            pos++;
+            if(isAMatch(pos, new char[] { 'u', 'U'})) {
+                pos++;
+            }
+        }
+        return text.substring(startPos, pos);
+    }
 
     public List<Token> lex() {
         List<Token> tokens = new ArrayList<Token>();
