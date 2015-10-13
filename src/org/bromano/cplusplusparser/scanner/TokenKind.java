@@ -9,8 +9,9 @@ public enum TokenKind {
     StringLiteral,
     BooleanLiteral,
     PointerLiteral,
-    UserDefinedLiteral, //TODO: What is this?
     //Keywords
+    AlignasKeyword,
+    AlignofKeyword,
     AsmKeyword,
     AutoKeyword,
     BoolKeyword,
@@ -87,8 +88,6 @@ public enum TokenKind {
     CloseBrace,
     OpenBracket,
     CloseBracket,
-    Hash,
-    HahHash,
     OpenParen,
     CloseParen,
     LessThanColon,
@@ -150,5 +149,6 @@ public enum TokenKind {
     Or,
     OrEq,
     Xor,
-    XorEq;
+    XorEq,
+    Identifier
 }

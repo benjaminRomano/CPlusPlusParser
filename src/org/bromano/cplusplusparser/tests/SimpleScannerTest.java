@@ -4,8 +4,7 @@ import org.bromano.cplusplusparser.scanner.*;
 import org.junit.Assert;
 
 import java.util.List;
-
-import static org.junit.Assert.*;
+import java.util.Map;
 
 public class SimpleScannerTest {
 
@@ -166,6 +165,13 @@ public class SimpleScannerTest {
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
 
+        try {
+            s.setText("0x");
+            s.lex();
+        } catch(RuntimeException e) {
+            Assert.assertEquals("Expected hexadecimal digit", e.getMessage());
+        }
+
         //Testing octal integer literals
         s.setText("07u 07ul 07ull 07uL 07uLL 07U 07Ul 07Ull 07UL 07ULL 0 01234567");
         assertTokensMatch(new Token[]{
@@ -184,11 +190,100 @@ public class SimpleScannerTest {
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
 
-        try {
-            s.setText("0x");
-            s.lex();
-        } catch(RuntimeException e) {
-            Assert.assertEquals("Expected hexadecimal digit", e.getMessage());
+
+        //Testing decimal integer literals
+        s.setText("7u 7ul 7ull 7uL 7uLL 7U 7Ul 7Ull 7UL 7ULL 1234567890");
+        assertTokensMatch(new Token[]{
+                new Token(TokenKind.IntegerLiteral, "7u"),
+                new Token(TokenKind.IntegerLiteral, "7ul"),
+                new Token(TokenKind.IntegerLiteral, "7ull"),
+                new Token(TokenKind.IntegerLiteral, "7uL"),
+                new Token(TokenKind.IntegerLiteral, "7uLL"),
+                new Token(TokenKind.IntegerLiteral, "7U"),
+                new Token(TokenKind.IntegerLiteral, "7Ul"),
+                new Token(TokenKind.IntegerLiteral, "7Ull"),
+                new Token(TokenKind.IntegerLiteral, "7UL"),
+                new Token(TokenKind.IntegerLiteral, "7ULL"),
+                new Token(TokenKind.IntegerLiteral, "1234567890"),
+                new Token(TokenKind.EndOfFile)
+        }, s.lex());
+
+        //Scanning string-literals with no non-raw strings
+        s.setText("\"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_-+=[]{}<>,./?~`|'\" \"\\u1234\" \"\\UFFFFAAAA\" \"\\'\\\"\\?\\\\\\a\\b\\f\\n\\r\\t\\v\" U\"\" u\"\" L\"\" u8\"\"");
+        assertTokensMatch(new Token[]{
+                new Token(TokenKind.StringLiteral, "\"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_-+=[]{}<>,./?~`|'\""),
+                new Token(TokenKind.StringLiteral, "\"\\u1234\""),
+                new Token(TokenKind.StringLiteral, "\"\\UFFFFAAAA\""),
+                new Token(TokenKind.StringLiteral, "\"\\'\\\"\\?\\\\\\a\\b\\f\\n\\r\\t\\v\""),
+                new Token(TokenKind.StringLiteral, "U\"\""),
+                new Token(TokenKind.StringLiteral, "u\"\""),
+                new Token(TokenKind.StringLiteral, "L\"\""),
+                new Token(TokenKind.StringLiteral, "u8\"\""),
+                new Token(TokenKind.EndOfFile)
+        }, s.lex());
+
+        //Scanning string-literals with no non-raw strings
+        s.setText("u8R\"()\" uR\"()\" UR\"()\" LR\"()\" R\"works(test()works\" R\"(test)\" R\"\"()\"\"");
+        assertTokensMatch(new Token[]{
+                new Token(TokenKind.StringLiteral, "u8R\"()\""),
+                new Token(TokenKind.StringLiteral, "uR\"()\""),
+                new Token(TokenKind.StringLiteral, "UR\"()\""),
+                new Token(TokenKind.StringLiteral, "LR\"()\""),
+                new Token(TokenKind.StringLiteral, "R\"works(test()works\""),
+                new Token(TokenKind.StringLiteral, "R\"(test)\""),
+                new Token(TokenKind.StringLiteral, "R\"\"()\"\""),
+                new Token(TokenKind.EndOfFile)
+        }, s.lex());
+
+
+        //Scanning character-literals
+        s.setText("'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_-+=[]{}<>,./?~`|\"' '\\u1234' '\\UFFFFAAAA' '\\'\\\"\\?\\\\\\a\\b\\f\\n\\r\\t\\v' '\\x0123456789ABCDEF' '\\01234567' U'a' u'a' L'a'");
+        assertTokensMatch(new Token[]{
+                new Token(TokenKind.CharacterLiteral, "'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_-+=[]{}<>,./?~`|\"'"),
+                new Token(TokenKind.CharacterLiteral, "'\\u1234'"),
+                new Token(TokenKind.CharacterLiteral, "'\\UFFFFAAAA'"),
+                new Token(TokenKind.CharacterLiteral, "'\\'\\\"\\?\\\\\\a\\b\\f\\n\\r\\t\\v'"),
+                new Token(TokenKind.CharacterLiteral, "'\\x0123456789ABCDEF'"),
+                new Token(TokenKind.CharacterLiteral, "'\\01234567'"),
+                new Token(TokenKind.CharacterLiteral, "U'a'"),
+                new Token(TokenKind.CharacterLiteral, "u'a'"),
+                new Token(TokenKind.CharacterLiteral, "L'a'"),
+                new Token(TokenKind.EndOfFile)
+        }, s.lex());
+
+        //Scanning identifiers
+        s.setText("\\U0000FFFF \\u0000 _\\u0000ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\\U1234AAAA a_");
+        assertTokensMatch(new Token[]{
+                new Token(TokenKind.Identifier, "\\U0000FFFF"),
+                new Token(TokenKind.Identifier, "\\u0000"),
+                new Token(TokenKind.Identifier, "_\\u0000ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\\U1234AAAA"),
+                new Token(TokenKind.Identifier, "a_"),
+                new Token(TokenKind.EndOfFile)
+        }, s.lex());
+
+        //Scanning floating-literals
+        s.setText("0e+5 0E-5 1e5 0.0f 0.F .1l 1.1L 0.e1 .1E1");
+        assertTokensMatch(new Token[]{
+                new Token(TokenKind.FloatingLiteral, "0e+5"),
+                new Token(TokenKind.FloatingLiteral, "0E-5"),
+                new Token(TokenKind.FloatingLiteral, "1e5"),
+                new Token(TokenKind.FloatingLiteral, "0.0f"),
+                new Token(TokenKind.FloatingLiteral, "0.F"),
+                new Token(TokenKind.FloatingLiteral, ".1l"),
+                new Token(TokenKind.FloatingLiteral, "1.1L"),
+                new Token(TokenKind.FloatingLiteral, "0.e1"),
+                new Token(TokenKind.FloatingLiteral, ".1E1"),
+                new Token(TokenKind.EndOfFile)
+        }, s.lex());
+
+        //Scan keywords
+        Map<String, TokenKind> keywordMap = s.generateKeywordMap();
+        for(String keyword : keywordMap.keySet()) {
+            s.setText(keyword);
+            assertTokensMatch(new Token[] {
+                    new Token(keywordMap.get(keyword), keyword),
+                    new Token(TokenKind.EndOfFile)
+            }, s.lex());
         }
     }
 

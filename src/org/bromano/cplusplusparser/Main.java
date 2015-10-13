@@ -33,7 +33,7 @@ public class Main {
         try {
             BufferedInputStream stream = new BufferedInputStream(new FileInputStream(filePath));
             Reader r = new InputStreamReader(stream, "UTF-8");
-            int c = 0;
+            int c;
             while ((c = r.read()) != -1) {
                 sb.append((char) c);
             }
