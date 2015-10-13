@@ -272,6 +272,26 @@ public class SimpleScanner implements Scanner {
                     if(isAMatch(pos, "=")) {
                         pos++;
                         return new Token(TokenKind.SlashEquals);
+                    } else if(isAMatch(pos, "/")) {
+                        pos++;
+                        while(pos < end) {
+                            if(isAMatch(pos, "\n")) {
+                                pos++;
+                                break;
+                            }
+                            pos++;
+                        }
+                        continue;
+                    } else if(isAMatch(pos, "*")) {
+                        pos++;
+                        while(pos < end) {
+                            if(isAMatch(pos, "*/")) {
+                                pos += 2;
+                                break;
+                            }
+                            pos++;
+                        }
+                        continue;
                     }
 
                     return new Token(TokenKind.Slash);

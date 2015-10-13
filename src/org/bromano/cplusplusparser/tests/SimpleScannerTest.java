@@ -13,7 +13,7 @@ public class SimpleScannerTest {
         Scanner s = new SimpleScanner();
 
         //White space
-        s.setText("\t\n\r\f#hello\n");
+        s.setText("\t\n\r\f #hello\n //hello\n /* int s = 5; \n int y = 6; */");
         assertTokensMatch(new Token[]{
                new Token(TokenKind.EndOfFile)
         }, s.lex());
@@ -83,7 +83,7 @@ public class SimpleScannerTest {
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
 
-        s.setText("//=");
+        s.setText("/ /=");
         assertTokensMatch(new Token[]{
                 new Token(TokenKind.Slash),
                 new Token(TokenKind.SlashEquals),
