@@ -149,7 +149,7 @@ public class SimpleScannerTest {
         }, s.lex());
 
         //Testing hexadecimal integer literals
-        s.setText("0xBu 0xBul 0xBull 0xBuL 0xBuLL 0xBU 0xBUl 0xBUll 0xBUL 0xBULL 0xABCDEF0123456789");
+        s.setText("0xBu 0xBul 0xBull 0xBuL 0xBuLL 0xBU 0xBUl 0xBUll 0xBUL 0xBULL 0xABCDEF0123456789 0x0BZ");
         assertTokensMatch(new Token[]{
                 new Token(TokenKind.IntegerLiteral, "0xBu"),
                 new Token(TokenKind.IntegerLiteral, "0xBul"),
@@ -162,6 +162,7 @@ public class SimpleScannerTest {
                 new Token(TokenKind.IntegerLiteral, "0xBUL"),
                 new Token(TokenKind.IntegerLiteral, "0xBULL"),
                 new Token(TokenKind.IntegerLiteral, "0xABCDEF0123456789"),
+                new Token(TokenKind.UserDefinedIntegerLiteral, "0x0BZ"),
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
 
@@ -173,7 +174,7 @@ public class SimpleScannerTest {
         }
 
         //Testing octal integer literals
-        s.setText("07u 07ul 07ull 07uL 07uLL 07U 07Ul 07Ull 07UL 07ULL 0 01234567");
+        s.setText("07u 07ul 07ull 07uL 07uLL 07U 07Ul 07Ull 07UL 07ULL 0 01234567 0AB");
         assertTokensMatch(new Token[]{
                 new Token(TokenKind.IntegerLiteral, "07u"),
                 new Token(TokenKind.IntegerLiteral, "07ul"),
@@ -187,12 +188,13 @@ public class SimpleScannerTest {
                 new Token(TokenKind.IntegerLiteral, "07ULL"),
                 new Token(TokenKind.IntegerLiteral, "0"),
                 new Token(TokenKind.IntegerLiteral, "01234567"),
+                new Token(TokenKind.UserDefinedIntegerLiteral, "0AB"),
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
 
 
         //Testing decimal integer literals
-        s.setText("7u 7ul 7ull 7uL 7uLL 7U 7Ul 7Ull 7UL 7ULL 1234567890");
+        s.setText("7u 7ul 7ull 7uL 7uLL 7U 7Ul 7Ull 7UL 7ULL 1234567890 1AB");
         assertTokensMatch(new Token[]{
                 new Token(TokenKind.IntegerLiteral, "7u"),
                 new Token(TokenKind.IntegerLiteral, "7ul"),
@@ -205,11 +207,12 @@ public class SimpleScannerTest {
                 new Token(TokenKind.IntegerLiteral, "7UL"),
                 new Token(TokenKind.IntegerLiteral, "7ULL"),
                 new Token(TokenKind.IntegerLiteral, "1234567890"),
+                new Token(TokenKind.UserDefinedIntegerLiteral, "1AB"),
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
 
         //Scanning string-literals with no non-raw strings
-        s.setText("\"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_-+=[]{}<>,./?~`|'\" \"\\u1234\" \"\\UFFFFAAAA\" \"\\'\\\"\\?\\\\\\a\\b\\f\\n\\r\\t\\v\" U\"\" u\"\" L\"\" u8\"\"");
+        s.setText("\"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_-+=[]{}<>,./?~`|'\" \"\\u1234\" \"\\UFFFFAAAA\" \"\\'\\\"\\?\\\\\\a\\b\\f\\n\\r\\t\\v\" U\"\" u\"\" L\"\" u8\"\" \"\"A ");
         assertTokensMatch(new Token[]{
                 new Token(TokenKind.StringLiteral, "\"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_-+=[]{}<>,./?~`|'\""),
                 new Token(TokenKind.StringLiteral, "\"\\u1234\""),
@@ -219,11 +222,12 @@ public class SimpleScannerTest {
                 new Token(TokenKind.StringLiteral, "u\"\""),
                 new Token(TokenKind.StringLiteral, "L\"\""),
                 new Token(TokenKind.StringLiteral, "u8\"\""),
+                new Token(TokenKind.UserDefinedStringLiteral, "\"\"A"),
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
 
         //Scanning string-literals with no non-raw strings
-        s.setText("u8R\"()\" uR\"()\" UR\"()\" LR\"()\" R\"works(test()works\" R\"(test)\" R\"\"()\"\"");
+        s.setText("u8R\"()\" uR\"()\" UR\"()\" LR\"()\" R\"works(test()works\" R\"(test)\" R\"\"()\"\" R\"\"()\"\"A");
         assertTokensMatch(new Token[]{
                 new Token(TokenKind.StringLiteral, "u8R\"()\""),
                 new Token(TokenKind.StringLiteral, "uR\"()\""),
@@ -232,6 +236,7 @@ public class SimpleScannerTest {
                 new Token(TokenKind.StringLiteral, "R\"works(test()works\""),
                 new Token(TokenKind.StringLiteral, "R\"(test)\""),
                 new Token(TokenKind.StringLiteral, "R\"\"()\"\""),
+                new Token(TokenKind.UserDefinedStringLiteral, "R\"\"()\"\"A"),
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
 
@@ -262,7 +267,7 @@ public class SimpleScannerTest {
         }, s.lex());
 
         //Scanning floating-literals
-        s.setText("0e+5 0E-5 1e5 0.0f 0.F .1l 1.1L 0.e1 .1E1");
+        s.setText("0e+5 0E-5 1e5 0.0f 0.F .1l 1.1L 0.e1 .1E1 0e+5A .1E1A");
         assertTokensMatch(new Token[]{
                 new Token(TokenKind.FloatingLiteral, "0e+5"),
                 new Token(TokenKind.FloatingLiteral, "0E-5"),
@@ -273,6 +278,8 @@ public class SimpleScannerTest {
                 new Token(TokenKind.FloatingLiteral, "1.1L"),
                 new Token(TokenKind.FloatingLiteral, "0.e1"),
                 new Token(TokenKind.FloatingLiteral, ".1E1"),
+                new Token(TokenKind.UserDefinedFloatingLiteral, "0e+5A"),
+                new Token(TokenKind.UserDefinedFloatingLiteral, ".1E1A"),
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
 

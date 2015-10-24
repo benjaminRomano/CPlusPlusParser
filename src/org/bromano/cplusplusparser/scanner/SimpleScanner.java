@@ -147,6 +147,8 @@ public class SimpleScanner implements Scanner {
     public Token scan() {
 
         while(true) {
+            String value = "";
+            String userDefinedSuffix = "";
             if(pos >= end) {
                 return new Token(TokenKind.EndOfFile);
             }
@@ -170,7 +172,14 @@ public class SimpleScanner implements Scanner {
 
                     return new Token(TokenKind.Exclamation);
                 case '"':
-                    return new Token(TokenKind.StringLiteral, scanString());
+                    value = scanString();
+                    userDefinedSuffix = scanIdentifier();
+
+                    if(userDefinedSuffix.length() > 0) {
+                        return new Token(TokenKind.UserDefinedStringLiteral, value + userDefinedSuffix);
+                    }
+
+                    return new Token(TokenKind.StringLiteral, value);
                 case '#':
                     while(pos < end) {
                         pos++;
@@ -207,7 +216,13 @@ public class SimpleScanner implements Scanner {
                     }
                     return new Token(TokenKind.Ampersand);
                 case '\'':
-                    return new Token(TokenKind.CharacterLiteral, scanCharSequence());
+                    value = scanCharSequence();
+                    userDefinedSuffix = scanIdentifier();
+
+                    if(userDefinedSuffix.length() > 0) {
+                        return new Token(TokenKind.UserDefinedCharacterLiteral, value + userDefinedSuffix);
+                    }
+                    return new Token(TokenKind.CharacterLiteral, value);
                 case '(':
                     pos++;
                     return new Token(TokenKind.OpenParen);
@@ -263,7 +278,14 @@ public class SimpleScanner implements Scanner {
                     } else if(isDecimalDigit(text.charAt(pos))) {
                         //Unconsume dot for floating-literal
                         pos--;
-                        return new Token(TokenKind.FloatingLiteral, scanFloatingLiteral());
+                        value = scanFloatingLiteral();
+                        userDefinedSuffix = scanIdentifier();
+
+                        if(userDefinedSuffix.length() > 0) {
+                            return new Token(TokenKind.UserDefinedFloatingLiteral, value + userDefinedSuffix);
+                        }
+
+                        return new Token(TokenKind.FloatingLiteral, value);
                     }
 
                     return new Token(TokenKind.Dot);
@@ -392,21 +414,44 @@ public class SimpleScanner implements Scanner {
                     return new Token(TokenKind.Tilde);
                 case '0':
                     pos++;
-                    String value = "0";
+                    value = "0";
                     if(isAMatch(pos, "x") || isAMatch(pos, "X")) {
                         value += text.charAt(pos);
                         pos++;
                         value += scanHexDigits(1, true) + scanIntegerSuffix();
+                        userDefinedSuffix = scanIdentifier();
+
+                        if(userDefinedSuffix.length() > 0) {
+                            return new Token(TokenKind.UserDefinedIntegerLiteral, value + userDefinedSuffix);
+                        }
 
                         return new Token(TokenKind.IntegerLiteral, value);
                     } else if(isFloatingLiteral()) {
                         //Unconsume 0 for floating-literal
                         pos--;
-                        return new Token(TokenKind.FloatingLiteral, scanFloatingLiteral());
+                        value = scanFloatingLiteral();
+                        userDefinedSuffix = scanIdentifier();
+
+                        if(userDefinedSuffix.length() > 0) {
+                            return new Token(TokenKind.UserDefinedFloatingLiteral, value + userDefinedSuffix);
+                        }
+                        return new Token(TokenKind.FloatingLiteral, value);
 
                     } else if(isOctalDigit(text.charAt(pos))) {
                         value += scanOctalDigits() + scanIntegerSuffix();
+                        userDefinedSuffix = scanIdentifier();
+
+                        if(userDefinedSuffix.length() > 0) {
+                            return new Token(TokenKind.UserDefinedIntegerLiteral, value + userDefinedSuffix);
+                        }
+
                         return new Token(TokenKind.IntegerLiteral, value);
+                    }
+
+                    userDefinedSuffix = scanIdentifier();
+
+                    if(userDefinedSuffix.length() > 0) {
+                        return new Token(TokenKind.UserDefinedIntegerLiteral, value + userDefinedSuffix);
                     }
 
                     return new Token(TokenKind.IntegerLiteral, value);
@@ -420,24 +465,79 @@ public class SimpleScanner implements Scanner {
                 case '8':
                 case '9':
                     if(isFloatingLiteral()) {
-                        return new Token(TokenKind.FloatingLiteral, scanFloatingLiteral());
+                        value = scanFloatingLiteral();
+                        userDefinedSuffix = scanIdentifier();
+                        if(userDefinedSuffix.length() > 0) {
+                           return new Token(TokenKind.UserDefinedFloatingLiteral, value + userDefinedSuffix);
+                        }
+                        return new Token(TokenKind.FloatingLiteral, value);
                     }
-                    return new Token(TokenKind.IntegerLiteral, scanDecimalDigits() + scanIntegerSuffix());
+
+                    value = scanDecimalDigits() + scanIntegerSuffix();
+                    userDefinedSuffix = scanIdentifier();
+
+                    if(userDefinedSuffix.length() > 0) {
+                        return new Token(TokenKind.UserDefinedIntegerLiteral, value + userDefinedSuffix);
+                    }
+
+                    return new Token(TokenKind.IntegerLiteral, value);
                 default:
                     if(isAMatch(pos, "u8R\"")) {
-                        return new Token(TokenKind.StringLiteral, scanEncodingPrefix() + scanRawString());
+                        value = scanEncodingPrefix() + scanRawString();
+                        userDefinedSuffix = scanIdentifier();
+
+                        if(userDefinedSuffix.length() > 0) {
+                            return new Token(TokenKind.UserDefinedStringLiteral, value + userDefinedSuffix);
+                        }
+                        return new Token(TokenKind.StringLiteral, value);
+
                     } else if (isAMatch(pos, "u8\"")) {
-                        return new Token(TokenKind.StringLiteral, scanEncodingPrefix() + scanString());
+                        value = scanEncodingPrefix() + scanString();
+                        userDefinedSuffix = scanIdentifier();
+
+                        if(userDefinedSuffix.length() > 0) {
+                            return new Token(TokenKind.UserDefinedStringLiteral, value + userDefinedSuffix);
+                        }
+
+                        return new Token(TokenKind.StringLiteral, value);
                     } else if(isAMatch(pos, new char[]{ 'u', 'U', 'L' })) {
                         if (isAMatch(pos + 1, "'")) {
-                            return new Token(TokenKind.CharacterLiteral, scanCharPrefix() + scanCharSequence());
+                            value = scanCharPrefix() + scanCharSequence();
+                            userDefinedSuffix = scanIdentifier();
+
+                            if (userDefinedSuffix.length() > 0) {
+                                return new Token(TokenKind.UserDefinedCharacterLiteral, value + userDefinedSuffix);
+                            }
+
+                            return new Token(TokenKind.CharacterLiteral, value);
                         } else if (isAMatch(pos + 1, "\"")) {
-                            return new Token(TokenKind.StringLiteral, scanEncodingPrefix() + scanString());
+                            value = scanEncodingPrefix() + scanString();
+                            userDefinedSuffix = scanIdentifier();
+
+                            if(userDefinedSuffix.length() > 0) {
+                                return new Token(TokenKind.UserDefinedStringLiteral, value + userDefinedSuffix);
+                            }
+
+                            return new Token(TokenKind.StringLiteral, value);
                         } else if (isAMatch(pos + 1, "R") && isAMatch(pos + 2, "\"")) {
-                            return new Token(TokenKind.StringLiteral, scanEncodingPrefix() + scanRawString());
+                            value = scanEncodingPrefix() + scanRawString();
+                            userDefinedSuffix = scanIdentifier();
+
+                            if(userDefinedSuffix.length() > 0) {
+                                return new Token(TokenKind.UserDefinedStringLiteral, value + userDefinedSuffix);
+                            }
+
+                            return new Token(TokenKind.StringLiteral, value);
                         }
                     } else if(isAMatch(pos, "R") && isAMatch(pos +1, "\"")) {
-                        return new Token(TokenKind.StringLiteral, scanRawString());
+                        value = scanRawString();
+                        userDefinedSuffix = scanIdentifier();
+
+                        if(userDefinedSuffix.length() > 0) {
+                            return new Token(TokenKind.UserDefinedStringLiteral, value + userDefinedSuffix);
+                        }
+
+                        return new Token(TokenKind.StringLiteral, value);
                     }
 
                     if(isNonDigit(ch)) {
@@ -578,7 +678,7 @@ public class SimpleScanner implements Scanner {
         }
 
         if(isFirstCharacter) {
-            error("Expected identifier");
+            return "";
         }
 
         return sb.toString();

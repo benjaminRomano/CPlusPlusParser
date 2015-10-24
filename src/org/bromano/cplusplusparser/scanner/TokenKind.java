@@ -9,6 +9,10 @@ public enum TokenKind {
     StringLiteral,
     BooleanLiteral,
     PointerLiteral,
+    UserDefinedIntegerLiteral,
+    UserDefinedFloatingLiteral,
+    UserDefinedStringLiteral,
+    UserDefinedCharacterLiteral,
     //Keywords
     AlignasKeyword,
     AlignofKeyword,
