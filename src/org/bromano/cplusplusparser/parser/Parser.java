@@ -6,5 +6,6 @@ import org.bromano.cplusplusparser.scanner.Token;
 import java.util.List;
 
 public interface Parser {
-    ParseNode parse(List<Token> tokens);
+    void setTokens(List<Token> tokens);
+    ParseNode parse();
 }
