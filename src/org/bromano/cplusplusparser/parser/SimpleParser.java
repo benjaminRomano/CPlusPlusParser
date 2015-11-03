@@ -1,6 +1,6 @@
 package org.bromano.cplusplusparser.parser;
 
-import org.bromano.cplusplusparser.parser.nodes.ParseNode;
+import org.bromano.cplusplusparser.parser.nodes.*;
 import org.bromano.cplusplusparser.scanner.Token;
 
 import java.util.ArrayList;
@@ -19,10 +19,22 @@ public class SimpleParser implements Parser {
 
     public void setTokens(List<Token> tokens) {
         this.tokens = tokens;
-
     }
 
     public ParseNode parse() {
-        return null;
+        ParserResult<TranslationUnit> parseTreeResults = tryParseTranslationUnit();
+
+        //TODO: Fix this to actually handle errors in the way wanted
+        if(parseTreeResults.error != null) {
+            System.out.println(parseTreeResults.error);
+            return null;
+        }
+
+        return parseTreeResults.value;
+    }
+
+    public ParserResult<TranslationUnit> tryParseTranslationUnit() {
+        ParserResult<TranslationUnit> parseResult = new ParserResult("NOT IMPLEMENTED YET");
+        return parseResult;
     }
 }
