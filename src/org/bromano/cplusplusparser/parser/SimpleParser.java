@@ -7,12 +7,22 @@ import org.bromano.cplusplusparser.parser.nodes.declarations.*;
 import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.CvQualifier;
 import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.Declarator;
 import org.bromano.cplusplusparser.parser.nodes.declarations.functions.FunctionDefinition;
+import org.bromano.cplusplusparser.parser.nodes.declarations.initializers.InitializerClause;
 import org.bromano.cplusplusparser.parser.nodes.declarations.names.TypeId;
 import org.bromano.cplusplusparser.parser.nodes.declarations.types.TrailingTypeSpecifier;
 import org.bromano.cplusplusparser.parser.nodes.declarations.types.TypeSpecifier;
 import org.bromano.cplusplusparser.parser.nodes.declarations.types.TypeSpecifierSequence;
+import org.bromano.cplusplusparser.parser.nodes.exceptions.ThrowExpression;
+import org.bromano.cplusplusparser.parser.nodes.expressions.*;
+import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewExpression;
+import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewInitializer;
+import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewPlacement;
+import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewTypeId;
+import org.bromano.cplusplusparser.parser.nodes.expressions.unaries.UnaryExpression;
+import org.bromano.cplusplusparser.parser.nodes.expressions.unaries.UnaryOperator;
 import org.bromano.cplusplusparser.parser.nodes.primaries.NestedNameSpecifier;
 import org.bromano.cplusplusparser.parser.nodes.templates.names.SimpleTemplateId;
+import org.bromano.cplusplusparser.parser.nodes.templates.names.TemplateArgument;
 import org.bromano.cplusplusparser.parser.nodes.templates.names.TemplateArgumentList;
 import org.bromano.cplusplusparser.parser.nodes.templates.names.TemplateName;
 import org.bromano.cplusplusparser.scanner.Token;
@@ -250,11 +260,45 @@ public class SimpleParser implements Parser {
         return new FunctionDefinition(attributeSpecifierSequence, declarationSpecifierSequence, declarator, parseFunctionBody());
     }
 
+    protected boolean checkDeclarationSpecifierSequence() {
+        this.checkDeclarationSpecifier();
+    }
+
+    protected boolean checkDeclarationSpecifier() {
+        return this.checkStorageClassSpecifier() ||
+                this.checkTypeSpecifier() ||
+                this.checkFunctionSpecifier() ||
+                this.check(new TokenKind[] {
+                TokenKind.FriendKeyword,
+                TokenKind.TypedefKeyword,
+                TokenKind.ConstexprKeyword
+        });
+    }
+
+    protected boolean checkStorageClassSpecifier() {
+        return this.check(new TokenKind[] {
+                TokenKind.AutoKeyword,
+                TokenKind.RegisterKeyword,
+                TokenKind.StaticKeyword,
+                TokenKind.ThreadLocalKeyword,
+                TokenKind.ExternKeyword,
+                TokenKind.MutableKeyword
+        });
+    }
+
+    protected boolean checkFunctionSpecifier() {
+        return this.check(new TokenKind[] {
+                        TokenKind.InlineKeyword,
+                        TokenKind.VirtualKeyword,
+                        TokenKind.ExplicitKeyword
+                });
+    }
+
     protected boolean checkAttributeSpecifierSequence() {
         return this.checkAttributeSpecifier();
     }
 
-    protected AttributeSpecifierSequence parseAttributeSpecifierSequence() {
+    protected AttributeSpecifierSequence parseAttributeSpecifierSequence() throws ParserException {
         this.savePos();
         try {
             return new AttributeSpecifierSequence(parseAttributeSpecifier(), parseAttributeSpecifierSequence());
@@ -605,8 +649,436 @@ public class SimpleParser implements Parser {
                 this.checkIdExpression();
     }
 
-    protected TemplateArgumentList parseTemplateArgumentList() {
+    protected TemplateArgumentList parseTemplateArgumentList() throws ParserException {
+        TemplateArgument templateArgument = parseTemplateArgument();
 
+        boolean hasDotDotDot = false;
+        if(this.check(TokenKind.DotDotDot)) {
+            this.match(TokenKind.DotDotDot);
+            hasDotDotDot = true;
+        }
+
+        if(this.check(TokenKind.Comma)) {
+            return new TemplateArgumentList(templateArgument, hasDotDotDot, parseTemplateArgumentList());
+        }
+
+        return new TemplateArgumentList(templateArgument, hasDotDotDot);
+    }
+
+    protected TemplateArgument parseTemplateArgument() {
+        if(this.checkConstantExpression()) {
+            return new TemplateArgument(parseConstantExpression());
+        }
+        return new TemplateArgument(parseTypeId());
+
+    }
+
+    protected Expression parseExpression() {
+        AssignmentExpression assignmentExpression = parseAssignmentExpression();
+
+        if(this.check(TokenKind.Comma)) {
+            return new Expression(assignmentExpression, parseExpression());
+        }
+
+        return new Expression(assignmentExpression);
+    }
+
+    protected AssignmentExpression parseAssignmentExpression() {
+        if(this.checkThrowExpression()) {
+           return AssignmentExpression(parseThrowExpression());
+        }
+
+        if(this.checkLogicalOrExpression()) {
+            this.savePos();
+            try {
+                return new AssignmentExpression(parseLogicalOrExpression(), parseAssignmentOperator(), parseInitializerClause());
+            } catch(ParserException exception) {
+                this.resetPos();
+            }
+        }
+        return new AssignmentExpression(parseConditionalExpression());
+    }
+
+    protected ThrowExpression parseThrowExpression() throws ParserException {
+        this.match(TokenKind.ThrowKeyword);
+
+        if(this.checkAssignmentExpression()) {
+            return new ThrowExpression(parseAssignmentExpression());
+        }
+
+        return new ThrowExpression();
+    }
+
+    protected ConstantExpression parseConstantExpression() {
+        return new ConstantExpression(parseConditionalExpression());
+    }
+
+    protected ConditionalExpression parseConditionalExpression() throws ParserException {
+        LogicalOrExpression logicalOrExpression = parseLogicalOrExpression();
+        if(this.check(TokenKind.Question)) {
+            this.match(TokenKind.Question);
+            Expression expression = parseExpression();
+            this.match(TokenKind.Colon);
+            AssignmentExpression assignmentExpression = parseAssignmentExpression();
+            return new ConditionalExpression(logicalOrExpression, expression, assignmentExpression);
+        }
+        return new ConditionalExpression(LogicalOrExpression);
+    }
+
+    protected LogicalOrExpression parseLogicalOrExpression() throws ParserException {
+        LogicalAndExpression logicalAndExpression = parseLogicalAndExpression();
+
+        if(this.check(TokenKind.BarBar)) {
+            this.match(TokenKind.BarBar);
+            return new LogicalOrExpression(logicalAndExpression, parseLogicalAndExpression());
+        }
+
+        return new LogicalOrExpression(logicalAndExpression);
+    }
+
+    protected LogicalAndExpression parseLogicalAndExpression() throws ParserException {
+        InclusiveOrExpression inclusiveOrExpression = parseInclusiveOrExpression();
+
+        if(this.check(TokenKind.AmpersandAmpersand)) {
+            this.match(TokenKind.AmpersandAmpersand);
+            return new LogicalAndExpression(inclusiveOrExpression, parseIclusiveOrExpression());
+        }
+
+        return new LogicalAndExpression(inclusiveOrExpression);
+    }
+
+    protected InclusiveOrExpression parseInclusiveOrExpression() throws ParserException {
+        ExclusiveOrExpression exclusiveOrExpression = parseExclusiveOrExpression();
+
+        if(this.check(TokenKind.Bar)) {
+            this.match(TokenKind.Bar);
+            return new InclusiveOrExpression(exclusiveOrExpression, parseExclusiveOrExpression());
+        }
+
+        return new InclusiveOrExpression(exclusiveOrExpression);
+    }
+
+    protected ExclusiveOrExpression parseExclusiveOrExpression() throws ParserException {
+        AndExpression andExpression = parseAndExpression();
+
+        if(this.check(TokenKind.Caret)) {
+            this.match(TokenKind.Caret);
+            return new ExclusiveOrExpression(andExpression, parseAndExpression());
+        }
+
+        return new ExclusiveOrExpression(andExpression);
+    }
+
+    protected AndExpression parseAndExpression() throws ParserException {
+        EqualityExpression equalityExpression = parseEqualityExpression();
+
+        if(this.check(TokenKind.Ampersand)) {
+            this.match(TokenKind.Ampersand);
+            return new AndExpression(equalityExpression, parseEqualityExpression());
+        }
+
+        return new AndExpression(equalityExpression);
+    }
+
+    protected EqualityExpression parseEqualityExpression() throws ParserException {
+        RelationalExpression relationalExpression = parseRelationalExpression();
+
+        if(this.check(new TokenKind[] {
+                TokenKind.EqualsEquals,
+                TokenKind.ExclamationEquals
+        })) {
+            Token operator = this.match(new TokenKind[] {
+                    TokenKind.EqualsEquals,
+                    TokenKind.ExclamationEquals
+            });
+
+            return new EqualityExpression(relationalExpression, operator, parseRelationalExpression());
+        }
+
+        return new EqualityExpression(parseRelationalExpression());
+    }
+
+    protected RelationalExpression parseRelationalExpression() throws ParserException {
+        ShiftExpression shiftExpression = parseShiftExpression();
+
+        if(this.check(new TokenKind[] {
+                TokenKind.LessThan,
+                TokenKind.LessThanEquals,
+                TokenKind.GreaterThan,
+                TokenKind.GreaterThanEquals
+        })) {
+            Token operator = this.match(new TokenKind[]{
+                    TokenKind.LessThan,
+                    TokenKind.LessThanEquals,
+                    TokenKind.GreaterThan,
+                    TokenKind.GreaterThanEquals
+            });
+
+            return new RelationalExpression(shiftExpression, operator, parseShiftExpression());
+        }
+
+        return new RelationalExpression(shiftExpression);
+    }
+
+    protected ShiftExpression parseShiftExpression() throws ParserException {
+        AdditiveExpression additiveExpression = parseAdditiveExpression();
+
+        if(this.check(new TokenKind[] {
+                TokenKind.LessThanLessThan,
+                TokenKind.GreaterThanGreaterThan,
+        })) {
+            Token operator = this.match(new TokenKind[]{
+                    TokenKind.LessThanLessThan,
+                    TokenKind.GreaterThanGreaterThan,
+            });
+
+            return new ShiftExpression(additiveExpression, operator, parseAdditiveExpression());
+        }
+
+        return new ShiftExpression(additiveExpression);
+    }
+
+    protected AdditiveExpression parseAdditiveExpression() throws ParserException {
+        MultiplicativeExpression multiplicativeExpression = parseMultiplicativeExpression();
+
+        if(this.check(new TokenKind[] {
+                TokenKind.Plus,
+                TokenKind.Minus,
+        })) {
+            Token operator = this.match(new TokenKind[]{
+                    TokenKind.Plus,
+                    TokenKind.Minus,
+            });
+
+            return new AdditiveExpression(multiplicativeExpression, operator, parseMultiplicativeExpression());
+        }
+
+        return new AdditiveExpression(multiplicativeExpression);
+    }
+
+    protected MultiplicativeExpression parseMultiplicativeExpression() throws ParserException {
+        PmExpression pmExpression = parsePmExpression();
+
+        if(this.check(new TokenKind[] {
+                TokenKind.Asterisk,
+                TokenKind.Slash,
+                TokenKind.Percent
+        })) {
+            Token operator = this.match(new TokenKind[]{
+                    TokenKind.Asterisk,
+                    TokenKind.Slash,
+                    TokenKind.Percent
+            });
+
+            return new MultiplicativeExpression(pmExpression, operator, parsePmExpression());
+        }
+
+        return new MultiplicativeExpression(pmExpression);
+    }
+
+    protected PmExpression parsePmExpression() throws ParserException {
+        CastExpression castExpression = parseCastExpression();
+
+        if(this.check(new TokenKind[] {
+                TokenKind.DotAsterisk,
+                TokenKind.MinusGreaterThanAsterisk
+        })) {
+            Token operator = this.match(new TokenKind[]{
+                    TokenKind.DotAsterisk,
+                    TokenKind.MinusGreaterThanAsterisk
+            });
+
+            return new PmExpression(castExpression, operator, parseCastExpression());
+        }
+
+        return new PmExpression(castExpression);
+    }
+
+    protected CastExpression parseCastExpression() throws ParserException {
+        this.savePos();
+        if(this.check(TokenKind.OpenParen)) {
+            try {
+                this.match(TokenKind.OpenParen);
+                TypeId typeId = parseTypeId();
+                this.match(TokenKind.CloseParen);
+                return new CastExpression(typeId, parseCastExpression());
+            } catch(ParserException exception) {
+                this.resetPos();
+            }
+        }
+        return new CastExpression(parseUnaryExpression());
+    }
+
+    protected UnaryExpression parseUnaryExpression() throws ParserException {
+        //New expression
+        this.savePos();
+        try {
+            return new UnaryExpression(parseNewExpression());
+        } catch (ParserException exception) {
+            this.resetPos();
+        }
+
+        //Delete expression
+        this.savePos();
+        try {
+            return new UnaryExpression(parseDeleteExpression());
+        } catch (ParserException exception) {
+            this.resetPos();
+        }
+
+        //Postfix-expression
+        this.savePos();
+        try {
+            return new UnaryExpression(parsePostfixExpression());
+        } catch (ParserException exception) {
+            this.resetPos();
+        }
+
+        //Alignof
+        if(this.check(TokenKind.AlignofKeyword)) {
+            this.match(TokenKind.AlignofKeyword);
+            this.match(TokenKind.OpenParen);
+            TypeId typeId = parseTypeId();
+            this.match(TokenKind.CloseParen);
+            return new UnaryExpression(typeId);
+        }
+
+        //No except
+        if(this.checkNoexceptExpression()) {
+            return new UnaryExpression(parseNoexceptExpression());
+        }
+
+
+        //++, --
+        if ((this.check(TokenKind.Plus) && this.check(TokenKind.Plus, 1)) ||
+                (this.check(TokenKind.Minus) && this.check(TokenKind.Minus, 1)) {
+            Token operator1 = this.match(new TokenKind[] {
+                    TokenKind.Plus,
+                    TokenKind.Minus
+            });
+            Token operator2 = this.match(new TokenKind[]{
+                    TokenKind.Plus,
+                    TokenKind.Minus
+            });
+            return new UnaryExpression(operator1, operator2, parseCastExpression());
+        }
+
+        // unary-operator cast-expression
+        if(this.checkUnaryOperator()) {
+            UnaryOperator operator = parseUnaryOperator();
+            return new UnaryExpression(operator, parseCastExpression());
+        }
+
+        if(this.check(TokenKind.SizeofKeyword)) {
+            //sizeof ( type-id )
+            this.savePos();
+            try {
+                this.match(TokenKind.OpenParen);
+                TypeId typeId = parseTypeId();
+                this.match(TokenKind.CloseParen);
+                return new UnaryExpression(typeId);
+            } catch (ParserException exception) {
+                this.resetPos();
+            }
+
+            //Sizeof ( identifier )
+            this.savePos();
+            try {
+                this.match(TokenKind.DotDotDot);
+                this.match(TokenKind.OpenParen);
+                Token identifier = this.match(TokenKind.Identifier);
+                this.match(TokenKind.CloseParen);
+                return new UnaryExpression(identifier);
+            } catch (ParserException exception) {
+                this.resetPos();
+            }
+
+            //sizeof unary-expression
+            this.match(TokenKind.SizeofKeyword);
+            this.savePos();
+            try {
+                return new UnaryExpression(parseUnaryExpression());
+            } catch (ParserException exception) {
+                this.resetPos();
+            }
+        }
+    }
+
+    protected UnaryOperator parseUnaryOperator() throws ParserException {
+        return new UnaryOperator(this.match(new TokenKind[] {
+                TokenKind.Asterisk,
+                TokenKind.Ampersand,
+                TokenKind.Plus,
+                TokenKind.Minus,
+                TokenKind.Exclamation,
+                TokenKind.Tilde
+        }));
+    }
+
+    protected DeleteExpression parseDeleteExpression() throws ParserException {
+        boolean hasColonColon = false;
+        if(this.check(TokenKind.ColonColon)) {
+            this.match(TokenKind.ColonColon);
+            hasColonColon = true;
+        }
+
+        this.match(TokenKind.DeleteKeyword);
+
+        if(this.check(TokenKind.OpenBracket)) {
+            this.savePos();
+            try {
+                this.match(TokenKind.OpenBracket);
+                this.match(TokenKind.CloseBracket);
+                return new DeleteExpression(hasColonColon, true,  parseCastExpression());
+            } catch(ParserException exception) {
+                this.resetPos();
+            }
+        }
+
+        return new DeleteExpression(hasColonColon, false, parseCastExpression());
+    }
+
+    protected NoexceptExpression parseNoexceptExpression() throws ParserException {
+        this.match(TokenKind.NoexceptKeyword);
+        this.match(TokenKind.OpenParen);
+        Expression expression = parseExpression();
+        this.match(TokenKind.CloseParen);
+        return new NoexceptExpression(expression);
+    }
+
+    protected NewExpression parseNewExpression() throws ParserException {
+        boolean hasColonColon = false;
+        if(this.check(TokenKind.ColonColon)) {
+            this.match(TokenKind.ColonColon);
+            hasColonColon = true;
+        }
+
+        this.match(TokenKind.NewKeyword);
+        NewPlacement newPlacement = null;
+        TypeId typeId = null;
+        NewTypeId newTypeId = null;
+        NewInitializer newInitialzer = null;
+
+        if(this.check(TokenKind.OpenParen)) {
+            this.savePos();
+            try {
+                newPlacement = parseNewPlacement();
+            } catch (ParserException exception) {
+                this.resetPos();
+            }
+        }
+
+        if(this.check(TokenKind.OpenParen)) {
+            typeId = parseTypeId();
+        } else {
+            newTypeId = parseNewTypeId();
+        }
+
+        if(this.checkNewInitializer()) {
+            newInitialzer = parseNewInitializer();
+        }
+
+        return new NewExpression(hasColonColon, newPlacement, newTypeId, typeId, newInitialzer);
     }
 
     protected boolean checkElaboratedTypeSpecifier() {
@@ -646,11 +1118,37 @@ public class SimpleParser implements Parser {
     }
 
     protected boolean checkClassSpecifier() {
-        return this.checkClassSpecifier();
+        return this.checkClassHead();
+    }
+
+    protected boolean checkClassHead() {
+        return this.checkClassKey();
     }
 
     protected boolean checkEnumSpecifier() {
-        return this.checkEnumSpecifier();
+        return this.checkEnumHead();
+    }
+
+    protected boolean checkEnumHead() {
+        return this.checkEnumKey();
+    }
+
+    protected boolean checkEnumKey() {
+       return this.check(TokenKind.EnumKeyword);
+    }
+
+    protected boolean checkExpression() {
+        return this.checkAssignmentExpression();
+    }
+
+    protected boolean checkAssignmentExpression() {
+        return this.checkConditionalExpression() ||
+                this.checkLogicalOrExpression() ||
+                this.checkThrowExpression();
+    }
+
+    protected boolean checkThrowExpression() {
+        return this.check(TokenKind.ThrowKeyword);
     }
 
     protected boolean checkConstantExpression() {

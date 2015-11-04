@@ -1,4 +1,4 @@
 package org.bromano.cplusplusparser.parser.nodes.expressions;
 
-public class ExlusiveOrExpression {
+public class ExclusiveOrExpression {
 }
