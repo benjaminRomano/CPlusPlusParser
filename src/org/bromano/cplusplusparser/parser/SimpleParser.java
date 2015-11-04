@@ -5,11 +5,14 @@ import org.bromano.cplusplusparser.parser.nodes.attributes.*;
 import org.bromano.cplusplusparser.parser.nodes.declarations.*;
 import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.CvQualifier;
 import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.Declarator;
+import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.ParametersAndQualifiers;
+import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.PtrOperator;
 import org.bromano.cplusplusparser.parser.nodes.declarations.functions.FunctionDefinition;
+import org.bromano.cplusplusparser.parser.nodes.declarations.names.AbstractDeclarator;
+import org.bromano.cplusplusparser.parser.nodes.declarations.names.NoptrAbstractDeclarator;
+import org.bromano.cplusplusparser.parser.nodes.declarations.names.PtrAbstractDeclarator;
 import org.bromano.cplusplusparser.parser.nodes.declarations.names.TypeId;
-import org.bromano.cplusplusparser.parser.nodes.declarations.types.TrailingTypeSpecifier;
-import org.bromano.cplusplusparser.parser.nodes.declarations.types.TypeSpecifier;
-import org.bromano.cplusplusparser.parser.nodes.declarations.types.TypeSpecifierSequence;
+import org.bromano.cplusplusparser.parser.nodes.declarations.types.*;
 import org.bromano.cplusplusparser.parser.nodes.exceptions.ThrowExpression;
 import org.bromano.cplusplusparser.parser.nodes.expressions.*;
 import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewExpression;
@@ -18,6 +21,7 @@ import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewPlacement;
 import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewTypeId;
 import org.bromano.cplusplusparser.parser.nodes.expressions.unaries.UnaryExpression;
 import org.bromano.cplusplusparser.parser.nodes.expressions.unaries.UnaryOperator;
+import org.bromano.cplusplusparser.parser.nodes.namespaces.NamespaceName;
 import org.bromano.cplusplusparser.parser.nodes.primaries.NestedNameSpecifier;
 import org.bromano.cplusplusparser.parser.nodes.templates.names.SimpleTemplateId;
 import org.bromano.cplusplusparser.parser.nodes.templates.names.TemplateArgument;
@@ -66,6 +70,10 @@ public class SimpleParser implements Parser {
 
     protected void savePos() {
         this.savedPos.push(this.pos);
+    }
+
+    protected void unsavePos() {
+        this.savedPos.pop();
     }
 
     protected void resetPos() {
@@ -395,7 +403,214 @@ public class SimpleParser implements Parser {
             return new TypeId(typeSpecifierSequence, parseAbstractorDeclarator());
         }
 
-        return new TypeId(typeSpecifierSequence);
+        return new TypeId(typeSpecifierSequence, null);
+    }
+
+    protected AbstractDeclarator parseAbstractDeclarator() throws ParserException {
+        if(this.check(TokenKind.DotDotDot)) {
+            this.match(TokenKind.DotDotDot);
+            return new AbstractDeclarator(true, null, null, null);
+        }
+
+        if(this.checkPtrAbstractDeclarator()) {
+            this.savePos();
+            try {
+                PtrAbstractDeclarator ptrAbstractDeclarator = parsePtrAbstractDeclarator();
+                this.unsavePos();
+                return new AbstractDeclarator(false, ptrAbstractDeclarator, null, null);
+            } catch (ParserException exception) {
+                this.resetPos();
+            }
+        }
+
+
+        NoptrAbstractDeclarator noptrAbstractDeclarator = null;
+        if(this.checkNoPtrAbstractDeclarator()) {
+            this.savePos();
+            try {
+                noptrAbstractDeclarator = parseNoPtrAbstractDeclarator();
+                this.unsavePos();
+            } catch(ParserException exception) {
+                this.resetPos();
+            }
+        }
+
+        return new AbstractDeclarator(false, null, noptrAbstractDeclarator, parseParametersAndQualifiers(), parseTrailingReturnType());
+    }
+
+    protected PtrAbstractDeclarator parsePtrAbstractDeclarator() throws ParserException {
+        if(this.checkPtrOperator()) {
+            PtrOperator ptrOperator = parsePtrOperator();
+            this.savePos();
+            if(this.checkPtrAbstractDeclarator()) {
+                try {
+                    this.unsavePos();
+                    return new PtrAbstractDeclarator(ptrOperator, parsePtrAbstractDeclarator());
+                } catch (ParserException exception) {
+                    this.resetPos();
+                }
+            }
+            return new PtrAbstractDeclarator(ptrOperaor);
+        }
+    }
+
+    protected PtrOperator parsePtrOperator() throws ParserException {
+
+        NestedNameSpecifier nestedNameSpecifier = null;
+        AttributeSpecifierSequence attributeSpecifierSequence = null;
+        CvQualifier cvQualifier = null;
+        Token token = null;
+
+        //First Token
+        if(this.check(TokenKind.Asterisk)) {
+            token = this.match(TokenKind.Asterisk);
+        } else if(this.check(TokenKind.Ampersand)) {
+            token = this.match(TokenKind.Asterisk);
+        } else if(this.check(TokenKind.AmpersandAmpersand)) {
+            token = this.match(TokenKind.Asterisk);
+        } else if(this.check(TokenKind.ColonColon)) {
+            token = this.match(TokenKind.ColonColon);
+            nestedNameSpecifier = parseNestedNameSpecifier();
+            this.match(TokenKind.Asterisk);
+        } else {
+            nestedNameSpecifier = parseNestedNameSpecifier();
+            this.match(TokenKind.Asterisk);
+        }
+
+        if(this.checkAttributeSpecifierSequence()) {
+            this.savePos();
+            try {
+                attributeSpecifierSequence = parseAttributeSpecifierSequence();
+                this.unsavePos();
+            } catch (ParserException exception) {
+                this.resetPos();
+            }
+        }
+
+        if(token == null || token.kind == TokenKind.ColonColon || token.kind == TokenKind.Asterisk) {
+            try {
+                cvQualifier = parseCvQualifier();
+                this.unsavePos();
+            } catch( ParserException exception) {
+                this.resetPos();
+            }
+        }
+
+        return new PtrOperator(token, nestedNameSpecifier, attributeSpecifierSequence, cvQualifier);
+    }
+
+    protected NestedNameSpecifier parseNestedNameSpecifier() {
+        DecltypeSpecifier decltypeSpecifier = null;
+        DecltypeSpecifier decltypeSpecifier = null;
+        Token identifier = null;
+        Boolean hasTemplateKeyword = false;
+        SimpleTemplateId simpleTemplateId = null;
+
+        if(this.checkTypeName()) {
+            this.savePos();
+            try {
+                TypeName typeName = parseTypeName();
+                this.match(TokenKind.ColonColon);
+                this.unsavePos();
+                return new NestedNameSpecifier(typeName);
+            } catch (ParserException exception) {
+                this.resetPos();
+            }
+        }
+
+        if(this.checkNamespaceName()) {
+            this.savePos();
+            try {
+                NamespaceName namespaceName = parseNamespaceName();
+                this.match(TokenKind.ColonColon);
+                this.unsavePos();
+                return new NestedNameSpecifier(namespaceName);
+            } catch (ParserException exception) {
+                this.resetPos();
+            }
+
+        }
+
+        if(this.checkDeclTypeSpecifier()) {
+            DecltypeSpecifier declTypeSpecifier = parseDecltypeSpecifier();
+            this.match(TokenKind.ColonColon);
+            return new NestedNameSpecifier(declTypeSpecifier);
+        }
+
+        //NOTE: IF GOING BACK TO THIS COMMIT. NEED TO CONTINUE FROM HERE
+
+        if(this.check(TokenKind.Identifier)) {
+
+        }
+
+        if(this.check(TokenKind.TemplateKeyword)) {
+
+        }
+
+        if(this.checkSimpleTemplateId()) {
+
+        }
+    }
+
+    protected NoptrAbstractDeclarator parseNoPtrAbstractDeclarator() throws ParserException {
+        if(this.check(TokenKind.OpenParen)) {
+            this.savePos();
+            //Ptr abstract declarator
+            try {
+                this.match(TokenKind.OpenParen);
+                PtrAbstractDeclarator ptrAbstractDeclarator = parsePtrAbstractDeclarator();
+                this.match(TokenKind.OpenParen);
+                this.unsavePos();
+
+                return new PtrAbstractDeclarator(ptrAbstractDeclarator);
+            } catch(ParserException exception) {
+                this.resetPos();
+            }
+
+            ParametersAndQualifiers parametersAndQualifiers = parseParametersAndQualifiers();
+
+            this.savePos();
+            if(this.checkNoPtrAbstractDeclarator()) {
+                try {
+                    NoptrAbstractDeclarator noPtrAbstractDeclarator = parseNoPtrAbstractDeclarator();
+                    this.unsavePos();
+                    return new NoptrAbstractDeclarator(parametersAndQualifiers, noPtrAbstractDeclarator);
+                } catch (ParserException exception) {
+                    this.resetPos();
+                }
+            }
+
+            return NoptrAbstractDeclarator(parametersAndQualifiers, null);
+        }
+
+        this.match(TokenKind.OpenBracket);
+        ConstantExpression constantExpression = parseConstantExpression();
+        this.match(TokenKind.CloseBracket);
+        AttributeSpecifierSequence attributeSpecifierSequence = null;
+
+        if(this.checkAttributeSpecifierSequence()) {
+            this.savePos();
+            try  {
+                attributeSpecifierSequence = parseAttributeSpecifierSequence();
+                this.unsavePos();
+            } catch (ParserException exception) {
+                this.resetPos();
+            }
+        }
+
+        NoptrAbstractDeclarator noPtrAbstractDeclarator = null;
+        if(this.checkNoPtrAbstractDeclarator()) {
+            this.savePos();
+            try  {
+                noPtrAbstractDeclarator = parseNoPtrAbstractDeclarator();
+                this.unsavePos();
+                return new NoptrAbstractDeclarator(constantExpression, attributeSpecifierSequence, noPtrAbstractDeclarator);
+            } catch (ParserException exception) {
+                this.resetPos();
+            }
+        }
+
+        return new NoptrAbstractDeclarator(constantExpression, attributeSpecifierSequence);
     }
 
     protected TypeSpecifierSequence parseTypeSpecifierSequence() {
@@ -1364,7 +1579,13 @@ public class SimpleParser implements Parser {
 
     protected boolean checkAbstractDeclarator() {
         return this.checkPtrAbstractDeclarator() ||
-                this.checkNoPtrAbstractDeclarator();
+                this.checkNoPtrAbstractDeclarator() ||
+                this.checkParametersAndQualifiers() ||
+                this.check(TokenKind.DotDotDot);
+    }
+
+    protected boolean checkParametersAndQualifiers() {
+        return this.check(TokenKind.OpenParen);
     }
 
     protected boolean checkPtrAbstractDeclarator() {
@@ -1423,7 +1644,9 @@ public class SimpleParser implements Parser {
     }
 
     protected boolean checkNoPtrAbstractDeclarator() {
-        return this.check(TokenKind.OpenParen);
+        return this.check(TokenKind.OpenParen) ||
+                this.check(TokenKind.OpenBracket);
+
     }
 
     protected boolean checkNewInitializer() {
