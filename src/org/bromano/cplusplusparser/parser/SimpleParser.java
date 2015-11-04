@@ -174,16 +174,8 @@ public class SimpleParser implements Parser {
         return parseTranslationUnit();
     }
 
-    protected boolean checkTranslationUnit() {
-        return this.checkDeclarationSequence();
-    }
-
     protected TranslationUnit parseTranslationUnit() throws ParserException {
         return new TranslationUnit(parseDeclarationSequence());
-    }
-
-    protected boolean checkDeclarationSequence() {
-        return this.checkDeclaration();
     }
 
     protected DeclarationSequence parseDeclarationSequence() throws ParserException {
@@ -197,26 +189,17 @@ public class SimpleParser implements Parser {
         return new DeclarationSequence(parseDeclaration());
     }
 
-    protected boolean checkDeclaration() {
-        return this.checkEmptyDeclaration();
-    }
 
     protected Declaration parseDeclaration() throws ParserException {
         return new Declaration(parseEmptyDeclaration());
     }
 
-    protected boolean checkEmptyDeclaration() {
-        return this.check(TokenKind.Semicolon);
-    }
 
     protected EmptyDeclaration parseEmptyDeclaration() throws ParserException {
         this.match(TokenKind.Semicolon);
         return new EmptyDeclaration();
     }
 
-    protected boolean checkFunctionDefinition() {
-        return this.checkAttributeSpecifierSequence();
-    }
 
     protected FunctionDefinition parseFunctionDefinition() throws ParserException {
         AttributeSpecifierSequence attributeSpecifierSequence = null;
@@ -260,44 +243,6 @@ public class SimpleParser implements Parser {
         return new FunctionDefinition(attributeSpecifierSequence, declarationSpecifierSequence, declarator, parseFunctionBody());
     }
 
-    protected boolean checkDeclarationSpecifierSequence() {
-        this.checkDeclarationSpecifier();
-    }
-
-    protected boolean checkDeclarationSpecifier() {
-        return this.checkStorageClassSpecifier() ||
-                this.checkTypeSpecifier() ||
-                this.checkFunctionSpecifier() ||
-                this.check(new TokenKind[] {
-                TokenKind.FriendKeyword,
-                TokenKind.TypedefKeyword,
-                TokenKind.ConstexprKeyword
-        });
-    }
-
-    protected boolean checkStorageClassSpecifier() {
-        return this.check(new TokenKind[] {
-                TokenKind.AutoKeyword,
-                TokenKind.RegisterKeyword,
-                TokenKind.StaticKeyword,
-                TokenKind.ThreadLocalKeyword,
-                TokenKind.ExternKeyword,
-                TokenKind.MutableKeyword
-        });
-    }
-
-    protected boolean checkFunctionSpecifier() {
-        return this.check(new TokenKind[] {
-                        TokenKind.InlineKeyword,
-                        TokenKind.VirtualKeyword,
-                        TokenKind.ExplicitKeyword
-                });
-    }
-
-    protected boolean checkAttributeSpecifierSequence() {
-        return this.checkAttributeSpecifier();
-    }
-
     protected AttributeSpecifierSequence parseAttributeSpecifierSequence() throws ParserException {
         this.savePos();
         try {
@@ -307,11 +252,6 @@ public class SimpleParser implements Parser {
         }
 
         return new AttributeSpecifierSequence(parseAttributeSpecifier());
-    }
-
-    protected boolean checkAttributeSpecifier() {
-        return this.check(TokenKind.OpenBracket) ||
-                this.checkAlignmentSpecifier();
     }
 
     protected AttributeSpecifier parseAttributeSpecifier() throws ParserException {
@@ -325,10 +265,6 @@ public class SimpleParser implements Parser {
         }
 
         return new AttributeSpecifier(parseAlignmentSpecifier());
-    }
-
-    protected boolean checkAttributeList() {
-        return this.checkAttribute();
     }
 
     protected AttributeList parseAttributeList() throws ParserException {
@@ -361,9 +297,6 @@ public class SimpleParser implements Parser {
         return new AttributeList();
     }
 
-    protected boolean checkAttribute() {
-        return this.checkAttribute();
-    }
 
     protected Attribute parseAttribute() {
         AttributeToken attributeToken = parseAttributeToken();
@@ -376,11 +309,6 @@ public class SimpleParser implements Parser {
         return new Attribute(attributeToken);
     }
 
-    protected boolean checkAttributeToken() {
-        return this.check(TokenKind.Identifier) ||
-                this.checkAttributeScopedToken();
-    }
-
     protected AttributeToken parseAttributeToken() throws ParserException {
         if(this.check(TokenKind.ColonColon, 1)) {
             return new AttributeToken(parseAttributeScopedToken());
@@ -390,10 +318,6 @@ public class SimpleParser implements Parser {
         return new AttributeToken();
     }
 
-    protected boolean checkAttributeScopedToken() {
-        return this.checkAttributeNamespace();
-    }
-
     protected AttributeScopedToken parseAttributeScopedToken() throws ParserException {
         AttributeNamespace attributeNamespace = parseAttributeNamespace();
         this.match(TokenKind.ColonColon);
@@ -401,17 +325,9 @@ public class SimpleParser implements Parser {
         return new AttributeScopedToken(attributeNamespace);
     }
 
-    protected boolean checkAttributeNamespace() {
-        return this.check(TokenKind.Identifier);
-    }
-
     protected AttributeNamespace parseAttributeNamespace() throws ParserException {
         this.match(TokenKind.Identifier);
         return new AttributeNamespace();
-    }
-
-    protected boolean checkAttributeArgumentClause() {
-        return this.check(TokenKind.OpenParen);
     }
 
     protected AttributeArgumentClause parseAttributeArgumentClause() throws ParserException {
@@ -419,10 +335,6 @@ public class SimpleParser implements Parser {
         BalancedTokenSequence balancedTokenSequence = parseBalancedTokenSequence();
         this.match(TokenKind.CloseParen);
         return new AttributeArgumentClause(balancedTokenSequence);
-    }
-
-    protected boolean checkBalancedTokenSequence() {
-        return this.checkBalancedToken();
     }
 
     protected BalancedTokenSequence parseBalancedTokenSequence() {
@@ -434,10 +346,6 @@ public class SimpleParser implements Parser {
         }
 
         return new BalancedTokenSequence(parseBalancedToken());
-    }
-
-    protected boolean checkBalancedToken() {
-        return true;
     }
 
     protected BalancedToken parseBalancedToken() throws ParserException {
@@ -469,10 +377,6 @@ public class SimpleParser implements Parser {
         return new BalancedToken(this.match());
     }
 
-    protected boolean checkAlignmentSpecifier() {
-        return this.check(TokenKind.AlignasKeyword);
-    }
-
     protected AlignmentSpecifier parseAlignmentSpecifier() throws ParserException {
         this.match(TokenKind.AlignasKeyword);
         this.match(TokenKind.OpenParen);
@@ -494,10 +398,6 @@ public class SimpleParser implements Parser {
         return new AlignmentSpecifier(alignmentExpression, hasDotDotDot);
     }
 
-    protected boolean checkTypeId() {
-        return this.checkTypeSpecifierSequence();
-    }
-
     protected TypeId parseTypeId() {
         TypeSpecifierSequence typeSpecifierSequence = parseTypeSpecifierSequence();
 
@@ -506,10 +406,6 @@ public class SimpleParser implements Parser {
         }
 
         return new TypeId(typeSpecifierSequence);
-    }
-
-    protected boolean checkTypeSpecifierSequence() {
-        return this.checkTypeSpecifier();
     }
 
     protected TypeSpecifierSequence parseTypeSpecifierSequence() {
@@ -528,12 +424,6 @@ public class SimpleParser implements Parser {
         }
 
         return new TypeSpecifierSequence(typeSpecifier);
-    }
-
-    protected boolean checkTypeSpecifier() {
-        return this.checkTrailingTypeSpecifier() ||
-                this.checkClassSpecifier() ||
-                this.checkEnumSpecifier();
     }
 
     protected TypeSpecifier parseTypeSpecifier() {
@@ -564,13 +454,6 @@ public class SimpleParser implements Parser {
         return new TypeSpecifier(parseEnumSpecifier());
     }
 
-    protected boolean checkTrailingTypeSpecifier() {
-        return this.checkSimpleTypeSpecifier() ||
-                this.checkElaboratedTypeSpecifier() ||
-                this.checkTypenameSpecifier() ||
-                this.checkCvQualifier();
-    }
-
     protected TrailingTypeSpecifier parseTrailingTypeSpecifier() {
         if(this.checkSimpleTypeSpecifier()) {
             return TrailingTypeSpecifier(parseSimpleTypeSpecifier());
@@ -583,22 +466,11 @@ public class SimpleParser implements Parser {
         return TrailingTypeSpecifier(parseCvQualifier());
     }
 
-    protected boolean checkCvQualifier() {
-       return this.check(new TokenKind[]{
-               TokenKind.ConstKeyword,
-               TokenKind.VolatileKeyword
-       });
-    }
-
     protected CvQualifier parseCvQualifier() throws ParserException {
         return new CvQualifier(this.match(new TokenKind[] {
                 TokenKind.ConstKeyword,
                 TokenKind.VolatileKeyword
-        }));
-    }
-
-    protected boolean checkTypenameSpecifier() {
-        return this.check(TokenKind.TypenameKeyword);
+        });
     }
 
     protected TypenameSpecifier parseTypeNameSpecifier() throws ParserException {
@@ -641,12 +513,6 @@ public class SimpleParser implements Parser {
 
     protected TemplateName parseTemplateName() {
         return new TemplateName(this.match(TokenKind.Identifier));
-    }
-
-    protected boolean checkTemplateArgumentList() {
-        return this.checkConstantExpression() ||
-                this.checkTypeId() ||
-                this.checkIdExpression();
     }
 
     protected TemplateArgumentList parseTemplateArgumentList() throws ParserException {
@@ -699,6 +565,23 @@ public class SimpleParser implements Parser {
         return new AssignmentExpression(parseConditionalExpression());
     }
 
+    protected AssignmentOperator parseAssignmentOperator() throws ParserException {
+        return new AssignmentOperator(this.match(new TokenKind[] {
+                TokenKind.Equals,
+                TokenKind.AsteriskEquals,
+                TokenKind.SlashEquals,
+                TokenKind.PercentEquals,
+                TokenKind.PlusEquals,
+                TokenKind.MinusEquals,
+                TokenKind.GreaterThanGreaterThanEquals,
+                TokenKind.LessThanLessThanEquals,
+                TokenKind.AmpersandEquals,
+                TokenKind.CaretEquals,
+                TokenKind.BarEquals
+        }));
+
+    }
+
     protected ThrowExpression parseThrowExpression() throws ParserException {
         this.match(TokenKind.ThrowKeyword);
 
@@ -741,7 +624,7 @@ public class SimpleParser implements Parser {
 
         if(this.check(TokenKind.AmpersandAmpersand)) {
             this.match(TokenKind.AmpersandAmpersand);
-            return new LogicalAndExpression(inclusiveOrExpression, parseIclusiveOrExpression());
+            return new LogicalAndExpression(inclusiveOrExpression, parseInclusiveOrExpression());
         }
 
         return new LogicalAndExpression(inclusiveOrExpression);
@@ -1346,4 +1229,215 @@ public class SimpleParser implements Parser {
         });
     }
 
+    protected boolean checkTranslationUnit() {
+        return this.checkDeclarationSequence();
+    }
+
+    protected boolean checkDeclarationSequence() {
+        return this.checkDeclaration();
+    }
+
+    protected boolean checkDeclaration() {
+        return this.checkEmptyDeclaration();
+    }
+
+    protected boolean checkEmptyDeclaration() {
+        return this.check(TokenKind.Semicolon);
+    }
+
+    protected boolean checkFunctionDefinition() {
+        return this.checkAttributeSpecifierSequence();
+    }
+
+    protected boolean checkDeclarationSpecifierSequence() {
+        return this.checkDeclarationSpecifier();
+    }
+
+    protected boolean checkDeclarationSpecifier() {
+        return this.checkStorageClassSpecifier() ||
+                this.checkTypeSpecifier() ||
+                this.checkFunctionSpecifier() ||
+                this.check(new TokenKind[] {
+                        TokenKind.FriendKeyword,
+                        TokenKind.TypedefKeyword,
+                        TokenKind.ConstexprKeyword
+                });
+    }
+
+    protected boolean checkStorageClassSpecifier() {
+        return this.check(new TokenKind[] {
+                TokenKind.AutoKeyword,
+                TokenKind.RegisterKeyword,
+                TokenKind.StaticKeyword,
+                TokenKind.ThreadLocalKeyword,
+                TokenKind.ExternKeyword,
+                TokenKind.MutableKeyword
+        });
+    }
+
+    protected boolean checkFunctionSpecifier() {
+        return this.check(new TokenKind[] {
+                TokenKind.InlineKeyword,
+                TokenKind.VirtualKeyword,
+                TokenKind.ExplicitKeyword
+        });
+    }
+
+    protected boolean checkAttributeSpecifierSequence() {
+        return this.checkAttributeSpecifier();
+    }
+
+    protected boolean checkAttributeSpecifier() {
+        return this.check(TokenKind.OpenBracket) ||
+                this.checkAlignmentSpecifier();
+    }
+
+    protected boolean checkAttributeList() {
+        return this.checkAttribute();
+    }
+
+    protected boolean checkAttribute() {
+        return this.checkAttribute();
+    }
+
+    protected boolean checkAttributeToken() {
+        return this.check(TokenKind.Identifier) ||
+                this.checkAttributeScopedToken();
+    }
+
+    protected boolean checkAttributeScopedToken() {
+        return this.checkAttributeNamespace();
+    }
+
+    protected boolean checkAttributeNamespace() {
+        return this.check(TokenKind.Identifier);
+    }
+
+    protected boolean checkAttributeArgumentClause() {
+        return this.check(TokenKind.OpenParen);
+    }
+
+    protected boolean checkBalancedTokenSequence() {
+        return this.checkBalancedToken();
+    }
+
+    protected boolean checkBalancedToken() {
+        return true;
+    }
+
+    protected boolean checkAlignmentSpecifier() {
+        return this.check(TokenKind.AlignasKeyword);
+    }
+
+    protected boolean checkTypeId() {
+        return this.checkTypeSpecifierSequence();
+    }
+
+    protected boolean checkTypeSpecifierSequence() {
+        return this.checkTypeSpecifier();
+    }
+
+    protected boolean checkTypeSpecifier() {
+        return this.checkTrailingTypeSpecifier() ||
+                this.checkClassSpecifier() ||
+                this.checkEnumSpecifier();
+    }
+
+    protected boolean checkTrailingTypeSpecifier() {
+        return this.checkSimpleTypeSpecifier() ||
+                this.checkElaboratedTypeSpecifier() ||
+                this.checkTypenameSpecifier() ||
+                this.checkCvQualifier();
+    }
+
+    protected boolean checkCvQualifier() {
+        return this.check(new TokenKind[] {
+            TokenKind.ConstKeyword,
+            TokenKind.VolatileKeyword
+        });
+    }
+
+    protected boolean checkTypenameSpecifier() {
+        return this.check(TokenKind.TypenameKeyword);
+    }
+
+    protected boolean checkTemplateArgumentList() {
+        return this.checkConstantExpression() ||
+                this.checkTypeId() ||
+                this.checkIdExpression();
+    }
+
+    protected boolean checkAbstractDeclarator() {
+        return this.checkPtrAbstractDeclarator() ||
+                this.checkNoPtrAbstractDeclarator();
+    }
+
+    protected boolean checkPtrAbstractDeclarator() {
+        return this.checkNoPtrAbstractDeclarator() ||
+                this.checkPtrOperator();
+    }
+
+    protected boolean checkPtrOperator() {
+        return this.checkNestedNameSpecifier() ||
+                this.check(new TokenKind[] {
+                TokenKind.Asterisk,
+                TokenKind.Ampersand,
+                TokenKind.AmpersandAmpersand,
+                TokenKind.ColonColon
+        });
+    }
+
+    protected boolean checkNestedNameSpecifier() {
+       return this.checkTypeName() ||
+               this.checkNamespaceName() ||
+               this.checkDeclTypeSpecifier() ||
+               this.checkNestedNameSpecifier();
+    }
+
+    protected boolean checkNamespaceName() {
+        return this.checkOriginalNamespaceName() ||
+                this.namespaceAlias();
+    }
+
+    protected boolean checkOriginalNamespaceName() {
+        return this.check(TokenKind.Identifier);
+    }
+
+    protected boolean namespaceAlias() {
+        return this.check(TokenKind.Identifier);
+    }
+
+    protected boolean checkTypeName() {
+        return this.checkClassName() ||
+                this.checkEnumName() ||
+                this.checkTypedefName() ||
+                this.checkSimpleTemplateId();
+    }
+
+    protected boolean checkTypedefName() {
+        return this.check(TokenKind.Identifier);
+    }
+
+    protected boolean checkEnumName() {
+        return this.check(TokenKind.Identifier);
+    }
+
+    protected boolean checkClassName() {
+        return this.check(TokenKind.Identifier) ||
+                this.checkSimpleTemplateId();
+    }
+
+    protected boolean checkNoPtrAbstractDeclarator() {
+        return this.check(TokenKind.OpenParen);
+    }
+
+    protected boolean checkNewInitializer() {
+        return this.check(TokenKind.OpenParen) ||
+                this.checkBracedInitList();
+    }
+
+    protected boolean checkBracedInitList() {
+        return this.check(TokenKind.OpenBrace);
+    }
 }
+
