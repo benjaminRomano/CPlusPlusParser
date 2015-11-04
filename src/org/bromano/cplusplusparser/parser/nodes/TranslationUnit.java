@@ -9,6 +9,11 @@ public class TranslationUnit extends BaseParseNode {
         this.type = NodeType.TRANSLATION_UNIT;
     }
 
+    public TranslationUnit(DeclarationSequence declarationSequence) {
+        this.declarationSequence = declarationSequence;
+        this.type = NodeType.TRANSLATION_UNIT;
+    }
+
     public void print(int depth) {
         super.print(depth);
 

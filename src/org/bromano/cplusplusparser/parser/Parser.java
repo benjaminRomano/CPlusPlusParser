@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface Parser {
     void setTokens(List<Token> tokens);
-    ParseNode parse();
+    ParseNode parse() throws ParserException;
 }
