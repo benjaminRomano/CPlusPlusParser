@@ -1,13 +1,11 @@
 package org.bromano.cplusplusparser.parser;
 
-import com.sun.org.apache.xalan.internal.xsltc.compiler.Template;
 import org.bromano.cplusplusparser.parser.nodes.*;
 import org.bromano.cplusplusparser.parser.nodes.attributes.*;
 import org.bromano.cplusplusparser.parser.nodes.declarations.*;
 import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.CvQualifier;
 import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.Declarator;
 import org.bromano.cplusplusparser.parser.nodes.declarations.functions.FunctionDefinition;
-import org.bromano.cplusplusparser.parser.nodes.declarations.initializers.InitializerClause;
 import org.bromano.cplusplusparser.parser.nodes.declarations.names.TypeId;
 import org.bromano.cplusplusparser.parser.nodes.declarations.types.TrailingTypeSpecifier;
 import org.bromano.cplusplusparser.parser.nodes.declarations.types.TypeSpecifier;
@@ -75,11 +73,7 @@ public class SimpleParser implements Parser {
     }
 
     protected boolean check(TokenKind kind) {
-        if(this.pos >= this.end || this.tokens.get(this.pos).kind != kind) {
-           return false;
-        }
-
-        return true;
+        return this.pos < this.end && this.tokens.get(this.pos ).kind == kind;
     }
 
     protected boolean check(TokenKind[] kinds, int lookahead) {
@@ -113,11 +107,7 @@ public class SimpleParser implements Parser {
     }
 
     protected boolean check(TokenKind kind, int lookahead) {
-        if(this.pos + lookahead >= this.end || this.tokens.get(this.pos + lookahead).kind != kind) {
-            return false;
-        }
-
-        return true;
+        return this.pos + lookahead < this.end && this.tokens.get(this.pos + lookahead).kind == kind;
     }
 
     protected Token match() throws ParserException {
@@ -470,7 +460,7 @@ public class SimpleParser implements Parser {
         return new CvQualifier(this.match(new TokenKind[] {
                 TokenKind.ConstKeyword,
                 TokenKind.VolatileKeyword
-        });
+        }));
     }
 
     protected TypenameSpecifier parseTypeNameSpecifier() throws ParserException {
@@ -484,7 +474,7 @@ public class SimpleParser implements Parser {
         NestedNameSpecifier nestedNameSpecifier = parseNestedNameSpecifier();
 
         if(this.check(TokenKind.Identifier)) {
-            return new TypenameSpecifier(hascolonColon, nestedNameSpecifier, this.match(TokenKind.Identifier);
+            return new TypenameSpecifier(hascolonColon, nestedNameSpecifier, this.match(TokenKind.Identifier));
         }
 
         boolean hasTemplate = false;
@@ -834,7 +824,7 @@ public class SimpleParser implements Parser {
 
         //++, --
         if ((this.check(TokenKind.Plus) && this.check(TokenKind.Plus, 1)) ||
-                (this.check(TokenKind.Minus) && this.check(TokenKind.Minus, 1)) {
+                (this.check(TokenKind.Minus) && this.check(TokenKind.Minus, 1))) {
             Token operator1 = this.match(new TokenKind[] {
                     TokenKind.Plus,
                     TokenKind.Minus
@@ -963,6 +953,11 @@ public class SimpleParser implements Parser {
 
         return new NewExpression(hasColonColon, newPlacement, newTypeId, typeId, newInitialzer);
     }
+
+
+    /*
+        Check functions
+     */
 
     protected boolean checkElaboratedTypeSpecifier() {
         return this.check(TokenKind.EnumKeyword) ||
@@ -1297,7 +1292,7 @@ public class SimpleParser implements Parser {
     }
 
     protected boolean checkAttribute() {
-        return this.checkAttribute();
+        return this.check(TokenKind.Identifier);
     }
 
     protected boolean checkAttributeToken() {
