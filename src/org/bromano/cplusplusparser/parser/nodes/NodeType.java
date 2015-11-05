@@ -1,5 +1,0 @@
-package org.bromano.cplusplusparser.parser.nodes;
-
-public enum NodeType {
-    DECLARATION_SEQUENCE, FUNCTION_DEFINITION, DECLARATION, BLOCK_DECLARATION, EMPTY_DECLARATION, TRANSLATION_UNIT
-}

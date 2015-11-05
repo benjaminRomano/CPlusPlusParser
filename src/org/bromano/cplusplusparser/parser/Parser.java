@@ -1,11 +1,11 @@
 package org.bromano.cplusplusparser.parser;
 
-import org.bromano.cplusplusparser.parser.nodes.ParseNode;
 import org.bromano.cplusplusparser.scanner.Token;
 
 import java.util.List;
+import java.util.Stack;
 
 public interface Parser {
     void setTokens(List<Token> tokens);
-    ParseNode parse() throws ParserException;
+    Stack<String> parse() throws ParserException;
 }

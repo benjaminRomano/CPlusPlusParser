@@ -1,32 +1,5 @@
 package org.bromano.cplusplusparser.parser;
 
-import org.bromano.cplusplusparser.parser.nodes.*;
-import org.bromano.cplusplusparser.parser.nodes.attributes.*;
-import org.bromano.cplusplusparser.parser.nodes.declarations.*;
-import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.CvQualifier;
-import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.Declarator;
-import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.ParametersAndQualifiers;
-import org.bromano.cplusplusparser.parser.nodes.declarations.declarators.PtrOperator;
-import org.bromano.cplusplusparser.parser.nodes.declarations.functions.FunctionDefinition;
-import org.bromano.cplusplusparser.parser.nodes.declarations.names.AbstractDeclarator;
-import org.bromano.cplusplusparser.parser.nodes.declarations.names.NoptrAbstractDeclarator;
-import org.bromano.cplusplusparser.parser.nodes.declarations.names.PtrAbstractDeclarator;
-import org.bromano.cplusplusparser.parser.nodes.declarations.names.TypeId;
-import org.bromano.cplusplusparser.parser.nodes.declarations.types.*;
-import org.bromano.cplusplusparser.parser.nodes.exceptions.ThrowExpression;
-import org.bromano.cplusplusparser.parser.nodes.expressions.*;
-import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewExpression;
-import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewInitializer;
-import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewPlacement;
-import org.bromano.cplusplusparser.parser.nodes.expressions.news.NewTypeId;
-import org.bromano.cplusplusparser.parser.nodes.expressions.unaries.UnaryExpression;
-import org.bromano.cplusplusparser.parser.nodes.expressions.unaries.UnaryOperator;
-import org.bromano.cplusplusparser.parser.nodes.namespaces.NamespaceName;
-import org.bromano.cplusplusparser.parser.nodes.primaries.NestedNameSpecifier;
-import org.bromano.cplusplusparser.parser.nodes.templates.names.SimpleTemplateId;
-import org.bromano.cplusplusparser.parser.nodes.templates.names.TemplateArgument;
-import org.bromano.cplusplusparser.parser.nodes.templates.names.TemplateArgumentList;
-import org.bromano.cplusplusparser.parser.nodes.templates.names.TemplateName;
 import org.bromano.cplusplusparser.scanner.Token;
 import org.bromano.cplusplusparser.scanner.TokenKind;
 
@@ -36,6 +9,10 @@ import java.util.Stack;
 
 public class SimpleParser implements Parser {
     protected List<Token> tokens;
+    protected Stack<String> tree;
+
+    protected Stack<Integer> savedTreePos;
+
     protected int pos;
     protected int end;
     protected Stack<Integer> savedPos;
@@ -68,6 +45,21 @@ public class SimpleParser implements Parser {
         return filteredTokens;
     }
 
+    protected void savePositions() {
+        this.savePos();
+        this.saveTreePos();
+    }
+
+    protected void unsavePositions() {
+        this.unsavePos();
+        this.unsaveTreePos();
+    }
+
+    protected void resetPositions() {
+        this.resetPos();
+        this.resetTreePos();
+    }
+
     protected void savePos() {
         this.savedPos.push(this.pos);
     }
@@ -78,6 +70,21 @@ public class SimpleParser implements Parser {
 
     protected void resetPos() {
         this.pos = this.savedPos.pop();
+    }
+
+    protected void saveTreePos() {
+        this.savedTreePos.push(this.tree.size());
+    }
+
+    protected void unsaveTreePos() {
+        this.savedTreePos.pop();
+    }
+
+    protected void resetTreePos() {
+        int treeSize = this.savedPos.pop();
+        while(this.tree.size() > treeSize) {
+            this.tree.pop();
+        }
     }
 
     protected boolean check(TokenKind kind) {
@@ -118,28 +125,51 @@ public class SimpleParser implements Parser {
         return this.pos + lookahead < this.end && this.tokens.get(this.pos + lookahead).kind == kind;
     }
 
-    protected Token match() throws ParserException {
+    protected String createNode(int depth, String text) {
+        StringBuilder node = new StringBuilder();
+        for(int i = 0; i < depth; i++) {
+            node.append("\t");
+        }
+        node.append(text);
+        return node.toString();
+
+    }
+
+    protected void addTreeNode(int depth, Token token) {
+        this.tree.push(this.createNode(depth, token.kind.name()));
+
+    }
+
+    protected void addTreeNode(int depth, NodeType node) {
+        this.tree.push(this.createNode(depth, node.name()));
+
+    }
+
+    protected Token match(int depth) throws ParserException {
         if(this.pos >= this.end) {
             throw new ParserException("Expected: token");
         }
 
         Token token = this.tokens.get(this.pos);
 
+        this.addTreeNode(depth, token);
+
         this.pos++;
         return token;
 
     }
 
-    protected Token match(TokenKind tokenKind) throws ParserException {
+    protected Token match(int depth, TokenKind tokenKind) throws ParserException {
         if(this.pos >= this.end || this.tokens.get(this.pos).kind != tokenKind) {
             throw new ParserException("Expected: " + tokenKind.name());
         }
 
         Token token = this.tokens.get(this.pos);
+        this.addTreeNode(depth, token);
         this.pos++;
         return token;
     }
-    protected Token match(TokenKind[] tokenKinds) throws ParserException {
+    protected Token match(int depth, TokenKind[] tokenKinds) throws ParserException {
         StringBuilder errorMessageBuilder = new StringBuilder();
         errorMessageBuilder.append("Expected one of following: ");
 
@@ -161,6 +191,7 @@ public class SimpleParser implements Parser {
         for(TokenKind tokenKind : tokenKinds) {
             if(token.kind == tokenKind) {
                 this.pos++;
+                this.addTreeNode(depth, token);
                 return token;
             }
         }
@@ -168,610 +199,741 @@ public class SimpleParser implements Parser {
         throw new ParserException(errorMessageBuilder.toString());
     }
 
-    public ParseNode parse() throws ParserException {
-        return parseTranslationUnit();
+    public Stack<String> parse() throws ParserException {
+        parseTranslationUnit(0);
+
+        return this.tree;
     }
 
-    protected TranslationUnit parseTranslationUnit() throws ParserException {
-        return new TranslationUnit(parseDeclarationSequence());
+
+    @FunctionalInterface
+    public interface ParseFunction {
+        void execute() throws ParserException;
     }
 
-    protected DeclarationSequence parseDeclarationSequence() throws ParserException {
-        this.savePos();
+    protected boolean tryParse(ParseFunction func) {
+        this.savePositions();
         try {
-            return new DeclarationSequence(parseDeclaration(), parseDeclarationSequence());
+            func.execute();
+            this.unsavePositions();
+            return true;
         } catch (ParserException exception) {
-            this.resetPos();
+            this.resetPositions();
         }
 
-        return new DeclarationSequence(parseDeclaration());
+        return false;
     }
 
-
-    protected Declaration parseDeclaration() throws ParserException {
-        return new Declaration(parseEmptyDeclaration());
+    protected boolean tryParse(ParseFunction[] funcs) {
+        for(ParseFunction func : funcs) {
+            if(tryParse(func)) {
+                return true;
+            }
+        }
+        return false;
     }
 
+    protected void parseTranslationUnit(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TRANSLATION_UNIT);
 
-    protected EmptyDeclaration parseEmptyDeclaration() throws ParserException {
-        this.match(TokenKind.Semicolon);
-        return new EmptyDeclaration();
+        if(this.checkDeclarationSequence()) {
+            parseDeclarationSequence(depth + 1);
+        }
+
     }
 
+    protected void parseDeclarationSequence(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.DECLARATION_SEQUENCE);
 
-    protected FunctionDefinition parseFunctionDefinition() throws ParserException {
-        AttributeSpecifierSequence attributeSpecifierSequence = null;
-        DeclarationSpecifierSequence declarationSpecifierSequence = null;
-        Declarator declarator = null;
+        if(this.checkDeclarationSequence()) {
+            boolean success = tryParse(() -> {
+                parseDeclaration(depth + 1);
+                parseDeclarationSequence(depth + 1);
+            });
 
-        if(this.checkAttributeSpecifierSequence()) {
-            this.savePos();
-
-            try {
-                attributeSpecifierSequence = parseAttributeSpecifierSequence();
-            } catch (ParserException exception) {
-                this.resetPos();
+            if(success) {
+                return;
             }
         }
 
-        if(this.checkDeclarationSpecifierSequence()) {
-            this.savePos();
-
-            try {
-                declarationSpecifierSequence = parseDeclarationSpecifierSequence();
-            } catch(ParserException exception) {
-                this.resetPos();
-            }
-        }
-
-        if(this.check(TokenKind.Equals)) {
-            this.match(TokenKind.Equals);
-
-            if(this.check(TokenKind.DefaultKeyword)) {
-                this.match(TokenKind.DefaultKeyword);
-            } else {
-                this.match(TokenKind.DeleteKeyword);
-            }
-
-            this.match(TokenKind.Semicolon);
-
-            return new FunctionDefinition(attributeSpecifierSequence, declarationSpecifierSequence, declarator);
-        }
-
-        return new FunctionDefinition(attributeSpecifierSequence, declarationSpecifierSequence, declarator, parseFunctionBody());
+        parseDeclaration(depth + 1);
     }
 
-    protected AttributeSpecifierSequence parseAttributeSpecifierSequence() throws ParserException {
-        this.savePos();
-        try {
-            return new AttributeSpecifierSequence(parseAttributeSpecifier(), parseAttributeSpecifierSequence());
-        } catch (ParserException exception) {
-            this.resetPos();
-        }
 
-        return new AttributeSpecifierSequence(parseAttributeSpecifier());
+    protected void parseDeclaration(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.DECLARATION);
+        parseEmptyDeclaration(depth + 1);
     }
 
-    protected AttributeSpecifier parseAttributeSpecifier() throws ParserException {
-        if(this.check(TokenKind.OpenBracket)) {
-            this.match(TokenKind.OpenBracket);
-            this.match(TokenKind.OpenBracket);
-            AttributeList attributeList = parseAttributeList();
-            this.match(TokenKind.CloseBracket);
-            this.match(TokenKind.CloseBracket);
-            return new AttributeSpecifier(attributeList);
-        }
-
-        return new AttributeSpecifier(parseAlignmentSpecifier());
+    protected void parseEmptyDeclaration(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.EMPTY_DECLARATION);
+        this.match(depth + 1, TokenKind.Semicolon);
     }
 
-    protected AttributeList parseAttributeList() throws ParserException {
-        if(this.checkAttribute()) {
-            Attribute attribute = parseAttribute();
 
-            if(this.check(TokenKind.DotDotDot)) {
-                this.match(TokenKind.DotDotDot);
+    protected void parseFunctionDefinition(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.FUNCTION_DEFINITION);
 
-                if(this.check(TokenKind.Comma)) {
-                    this.match(TokenKind.Comma);
-                    return new AttributeList(attribute, parseAttributeList());
+        ParseFunction tryDeclarator = () -> {
+            parseDeclarator(depth + 1);
+
+            if(this.check(TokenKind.Equals)) {
+                this.match(depth + 1, TokenKind.Equals);
+
+                if (this.check(TokenKind.DefaultKeyword)) {
+                    this.match(depth + 1, TokenKind.DefaultKeyword);
+                } else {
+                    this.match(depth + 1, TokenKind.DeleteKeyword);
                 }
 
-                return new AttributeList(attribute);
-
-            } else if(this.check(TokenKind.Comma)) {
-                this.match(TokenKind.Comma);
-                return new AttributeList(attribute, parseAttributeList());
+                this.match(depth + 1,TokenKind.Semicolon);
+                return;
             }
 
-            return new AttributeList(attribute);
+            parseFunctionBody(depth + 1);
+        };
+
+        ParseFunction tryDeclarationSpecifierSequence = () -> {
+            parseDeclarationSpecifierSequence(depth + 1);
+            tryDeclarator.execute();
+        };
+
+        ParseFunction tryAttributeSpecifierSequence = () -> {
+            parseAttributeSpecifierSequence(depth + 1);
+            if(tryParse(tryDeclarationSpecifierSequence)) {
+                return;
+            }
+
+            tryDeclarator.execute();
+        };
+
+        if(tryParse(tryAttributeSpecifierSequence)) return;
+        if(tryParse(tryDeclarationSpecifierSequence)) return;
+        tryDeclarator.execute();
+    }
+
+    protected void parseAttributeSpecifierSequence(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ATTIBUTE_SPECIFIER_SEQUENCE);
+
+        if(this.checkAttributeSpecifierSequence()) {
+            boolean success = tryParse(() -> {
+                parseAttributeSpecifier(depth + 1);
+                parseAttributeSpecifierSequence(depth + 1);
+            });
+
+            if(success) {
+                return;
+            }
+        }
+
+        parseAttributeSpecifier(depth + 1);
+    }
+
+    protected void parseAttributeSpecifier(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ATTRIBUTE_SPECIFIER);
+
+        if(this.check(TokenKind.OpenBracket)) {
+            this.match(depth + 1 ,TokenKind.OpenBracket);
+            this.match(depth + 1, TokenKind.OpenBracket);
+            parseAttributeList();
+            this.match(depth + 1, TokenKind.CloseBracket);
+            this.match(depth + 1, TokenKind.CloseBracket);
+            return;
+        }
+
+        parseAlignmentSpecifier(depth + 1);
+    }
+
+    protected void parseAttributeList(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ATTRIBUTE_LIST);
+
+        if(this.checkAttribute()) {
+            parseAttribute(depth + 1);
+
+            if(this.check(TokenKind.DotDotDot)) {
+                this.match(depth + 1, TokenKind.DotDotDot);
+
+                if(this.check(TokenKind.Comma)) {
+                    this.match(depth + 1, TokenKind.Comma);
+                    parseAttributeList(depth + 1);
+                }
+            } else if(this.check(TokenKind.Comma)) {
+                this.match(depth + 1, TokenKind.Comma);
+                parseAttributeList(depth + 1);
+                return;
+            }
         }
 
         if(this.check(TokenKind.Comma)) {
-            this.match(TokenKind.Comma);
-            return parseAttributeList();
+            this.match(depth + 1, TokenKind.Comma);
+            parseAttributeList(depth + 1);
         }
-
-        return new AttributeList();
     }
 
 
-    protected Attribute parseAttribute() {
-        AttributeToken attributeToken = parseAttributeToken();
+    protected void parseAttribute(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ATTRIBUTE);
+
+        parseAttributeToken(depth + 1);
 
         if(this.checkAttributeArgumentClause()) {
-            AttributeArgumentClause attributeArgumentClause = parseAttributeArgumentClause();
-            return new Attribute(attributeToken, attributeArgumentClause);
+            tryParse(() -> parseAttributeArgumentClause(depth + 1));
+        }
+    }
+
+    protected void parseAttributeToken(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ATTRIBUTE_TOKEN);
+
+        boolean success = tryParse(() -> parseAttributeScopedToken(depth + 1));
+
+        if(success) {
+            return;
         }
 
-        return new Attribute(attributeToken);
+        this.match(depth + 1, TokenKind.Identifier);
     }
 
-    protected AttributeToken parseAttributeToken() throws ParserException {
-        if(this.check(TokenKind.ColonColon, 1)) {
-            return new AttributeToken(parseAttributeScopedToken());
+    protected void parseAttributeScopedToken(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ATTRIBUTE_SCOPED_TOKEN);
+
+        parseAttributeNamespace(depth + 1);
+
+        this.match(depth + 1, TokenKind.ColonColon);
+        this.match(depth + 1 ,TokenKind.Identifier);
+    }
+
+    protected void parseAttributeNamespace(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ATTRIBUTE_NAMESPACE);
+
+        this.match(depth + 1, TokenKind.Identifier);
+    }
+
+    protected void parseAttributeArgumentClause(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ATTRIBUTE_ARGUMENT_CLAUSE);
+
+        this.match(depth + 1, TokenKind.OpenParen);
+        parseBalancedTokenSequence(depth + 1);
+        this.match(depth + 1, TokenKind.CloseParen);
+    }
+
+    protected void parseBalancedTokenSequence(int depth) {
+        this.addTreeNode(depth, NodeType.ATTRIBUTE_ARGUMENT_CLAUSE);
+
+        boolean success = tryParse(() -> {
+            parseBalancedToken(depth + 1);
+            parseBalancedTokenSequence(depth + 1);
+        });
+
+        if(success) {
+            return;
         }
 
-        this.match(TokenKind.Identifier);
-        return new AttributeToken();
+        this.parseBalancedToken();
     }
 
-    protected AttributeScopedToken parseAttributeScopedToken() throws ParserException {
-        AttributeNamespace attributeNamespace = parseAttributeNamespace();
-        this.match(TokenKind.ColonColon);
-        this.match(TokenKind.Identifier);
-        return new AttributeScopedToken(attributeNamespace);
-    }
+    protected void parseBalancedToken(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.BALANCED_TOKEN);
 
-    protected AttributeNamespace parseAttributeNamespace() throws ParserException {
-        this.match(TokenKind.Identifier);
-        return new AttributeNamespace();
-    }
-
-    protected AttributeArgumentClause parseAttributeArgumentClause() throws ParserException {
-        this.match(TokenKind.OpenParen);
-        BalancedTokenSequence balancedTokenSequence = parseBalancedTokenSequence();
-        this.match(TokenKind.CloseParen);
-        return new AttributeArgumentClause(balancedTokenSequence);
-    }
-
-    protected BalancedTokenSequence parseBalancedTokenSequence() {
-        this.savePos();
-        try {
-            return new BalancedTokenSequence(parseBalancedToken(), parseBalancedTokenSequence());
-        } catch (ParserException exception) {
-            this.resetPos();
-        }
-
-        return new BalancedTokenSequence(parseBalancedToken());
-    }
-
-    protected BalancedToken parseBalancedToken() throws ParserException {
         if(this.check(new TokenKind[]{
                 TokenKind.OpenBracket,
                 TokenKind.OpenBrace,
                 TokenKind.OpenParen
         })) {
-            Token token = this.match(new TokenKind[]{
+            Token token = this.match(depth + 1, new TokenKind[]{
                     TokenKind.OpenBracket,
                     TokenKind.OpenBrace,
                     TokenKind.OpenParen
             });
 
-            BalancedTokenSequence balancedTokenSequence = parseBalancedTokenSequence();
+            parseBalancedTokenSequence(depth + 1);
 
-            Token closingToken = null;
             if (token.kind == TokenKind.OpenBracket) {
-                closingToken = this.match(TokenKind.CloseBracket);
+                this.match(depth + 1, TokenKind.CloseBracket);
             } else if (token.kind == TokenKind.OpenBrace) {
-                closingToken = this.match(TokenKind.OpenBrace);
+                this.match(depth + 1, TokenKind.OpenBrace);
             } else {
-                closingToken = this.match(TokenKind.OpenParen);
+                this.match(depth + 1 ,TokenKind.OpenParen);
             }
 
-            return new BalancedToken(token, balancedTokenSequence, closingToken);
+            return;
         }
 
-        return new BalancedToken(this.match());
+        this.match(depth + 1);
     }
 
-    protected AlignmentSpecifier parseAlignmentSpecifier() throws ParserException {
-        this.match(TokenKind.AlignasKeyword);
-        this.match(TokenKind.OpenParen);
+    protected void parseAlignmentSpecifier(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ALIGNMENT_SPECIFIER);
 
-        boolean hasDotDotDot = false;
-        if(this.check(TokenKind.DotDotDot)) {
-            hasDotDotDot = true;
-            this.match(TokenKind.DotDotDot);
-        }
+        this.match(depth + 1, TokenKind.AlignasKeyword);
+        this.match(depth + 1, TokenKind.OpenParen);
 
         if(this.checkTypeId()) {
-            TypeId typeId = parseTypeId();
-            this.match(TokenKind.CloseParen);
-            return new AlignmentSpecifier(typeId, hasDotDotDot);
+            tryParse(() -> parseTypeId());
+        } else {
+            parseAlignnmentExpression();
         }
 
-        AlignmentExpression alignmentExpression = parseAlignmentExpression();
-        this.match(TokenKind.CloseParen);
-        return new AlignmentSpecifier(alignmentExpression, hasDotDotDot);
+        if(this.check(TokenKind.DotDotDot)) {
+            this.match(depth + 1, TokenKind.DotDotDot);
+        }
+
+        this.match(depth + 1, TokenKind.CloseParen);
     }
 
-    protected TypeId parseTypeId() {
-        TypeSpecifierSequence typeSpecifierSequence = parseTypeSpecifierSequence();
+    protected void parseTypeId(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TYPE_ID);
+
+        parseTypeSpecifierSequence(depth + 1);
 
         if(this.checkAbstractDeclarator()) {
-            return new TypeId(typeSpecifierSequence, parseAbstractorDeclarator());
+            tryParse(() -> parseAbstractDeclarator(depth + 1));
         }
-
-        return new TypeId(typeSpecifierSequence, null);
     }
 
-    protected AbstractDeclarator parseAbstractDeclarator() throws ParserException {
+    protected void parseAbstractDeclarator(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ABSTRACT_DECLARATOR);
+
         if(this.check(TokenKind.DotDotDot)) {
-            this.match(TokenKind.DotDotDot);
-            return new AbstractDeclarator(true, null, null, null);
+            this.match(depth + 1, TokenKind.DotDotDot);
+            return;
+        }
+
+        if(this.checkNoPtrAbstractDeclarator()) {
+            tryParse(() -> {
+                parseNoPtrAbstractDeclarator(depth + 1);
+                parseParametersAndQualiifiers(depth + 1);
+                parseTrailingReturnType(depth + 1);
+            });
         }
 
         if(this.checkPtrAbstractDeclarator()) {
-            this.savePos();
-            try {
-                PtrAbstractDeclarator ptrAbstractDeclarator = parsePtrAbstractDeclarator();
-                this.unsavePos();
-                return new AbstractDeclarator(false, ptrAbstractDeclarator, null, null);
-            } catch (ParserException exception) {
-                this.resetPos();
-            }
+            parsePtrAbstractDeclarator();
+            return;
         }
 
-
-        NoptrAbstractDeclarator noptrAbstractDeclarator = null;
-        if(this.checkNoPtrAbstractDeclarator()) {
-            this.savePos();
-            try {
-                noptrAbstractDeclarator = parseNoPtrAbstractDeclarator();
-                this.unsavePos();
-            } catch(ParserException exception) {
-                this.resetPos();
-            }
-        }
-
-        return new AbstractDeclarator(false, null, noptrAbstractDeclarator, parseParametersAndQualifiers(), parseTrailingReturnType());
+        parseParametersAndQualifiers(depth + 1);
+        parseTrailingReturnType(depth + 1);
     }
 
-    protected PtrAbstractDeclarator parsePtrAbstractDeclarator() throws ParserException {
+    protected void parsePtrAbstractDeclarator(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.PTR_ABSTRACT_DECLARATOR);
+
         if(this.checkPtrOperator()) {
-            PtrOperator ptrOperator = parsePtrOperator();
-            this.savePos();
-            if(this.checkPtrAbstractDeclarator()) {
-                try {
-                    this.unsavePos();
-                    return new PtrAbstractDeclarator(ptrOperator, parsePtrAbstractDeclarator());
-                } catch (ParserException exception) {
-                    this.resetPos();
-                }
-            }
-            return new PtrAbstractDeclarator(ptrOperaor);
+            parsePtrOperator(depth + 1);
+
+            tryParse(() -> {
+                parsePtrAbstractDeclarator(depth + 1);
+            });
+
+            return;
         }
+
+        parseNoPtrAbstractDeclarator(depth + 1);
     }
 
-    protected PtrOperator parsePtrOperator() throws ParserException {
+    protected void parsePtrOperator(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.PTR_OPERATOR);
 
-        NestedNameSpecifier nestedNameSpecifier = null;
-        AttributeSpecifierSequence attributeSpecifierSequence = null;
-        CvQualifier cvQualifier = null;
-        Token token = null;
+        if(this.check(new TokenKind[] {
+                TokenKind.Ampersand,
+                TokenKind.AmpersandAmpersand
+        })) {
+            this.match(depth + 1, new TokenKind[]{
+                    TokenKind.Ampersand,
+                    TokenKind.AmpersandAmpersand
+            });
 
-        //First Token
+            tryParse(() -> parseAttributeSpecifierSequence(depth + 1));
+
+            return;
+        }
+
         if(this.check(TokenKind.Asterisk)) {
-            token = this.match(TokenKind.Asterisk);
-        } else if(this.check(TokenKind.Ampersand)) {
-            token = this.match(TokenKind.Asterisk);
-        } else if(this.check(TokenKind.AmpersandAmpersand)) {
-            token = this.match(TokenKind.Asterisk);
-        } else if(this.check(TokenKind.ColonColon)) {
-            token = this.match(TokenKind.ColonColon);
-            nestedNameSpecifier = parseNestedNameSpecifier();
-            this.match(TokenKind.Asterisk);
-        } else {
-            nestedNameSpecifier = parseNestedNameSpecifier();
-            this.match(TokenKind.Asterisk);
+            this.match(depth + 1, TokenKind.Asterisk);
+
+            tryParse(() -> {
+                parseAttributeSpecifierSequence(depth + 1);
+                tryParse(() -> parseCvQualifier(depth + 1));
+            });
+
+            return;
         }
 
-        if(this.checkAttributeSpecifierSequence()) {
-            this.savePos();
-            try {
-                attributeSpecifierSequence = parseAttributeSpecifierSequence();
-                this.unsavePos();
-            } catch (ParserException exception) {
-                this.resetPos();
-            }
+        if(this.check(TokenKind.ColonColon)) {
+            this.match(depth + 1, TokenKind.ColonColon);
         }
 
-        if(token == null || token.kind == TokenKind.ColonColon || token.kind == TokenKind.Asterisk) {
-            try {
-                cvQualifier = parseCvQualifier();
-                this.unsavePos();
-            } catch( ParserException exception) {
-                this.resetPos();
-            }
-        }
+        parseNestedNameSpecifier();
+        this.match(depth + 1, TokenKind.Asterisk);
 
-        return new PtrOperator(token, nestedNameSpecifier, attributeSpecifierSequence, cvQualifier);
+        tryParse(() -> {
+            parseAttributeSpecifierSequence(depth + 1);
+            tryParse(() -> parseCvQualifier(depth + 1));
+        });
     }
 
-    protected NestedNameSpecifier parseNestedNameSpecifier() {
-        DecltypeSpecifier decltypeSpecifier = null;
-        DecltypeSpecifier decltypeSpecifier = null;
-        Token identifier = null;
-        Boolean hasTemplateKeyword = false;
-        SimpleTemplateId simpleTemplateId = null;
-
-        if(this.checkTypeName()) {
-            this.savePos();
-            try {
-                TypeName typeName = parseTypeName();
-                this.match(TokenKind.ColonColon);
-                this.unsavePos();
-                return new NestedNameSpecifier(typeName);
-            } catch (ParserException exception) {
-                this.resetPos();
-            }
-        }
-
-        if(this.checkNamespaceName()) {
-            this.savePos();
-            try {
-                NamespaceName namespaceName = parseNamespaceName();
-                this.match(TokenKind.ColonColon);
-                this.unsavePos();
-                return new NestedNameSpecifier(namespaceName);
-            } catch (ParserException exception) {
-                this.resetPos();
-            }
-
-        }
-
-        if(this.checkDeclTypeSpecifier()) {
-            DecltypeSpecifier declTypeSpecifier = parseDecltypeSpecifier();
-            this.match(TokenKind.ColonColon);
-            return new NestedNameSpecifier(declTypeSpecifier);
-        }
-
-        //NOTE: IF GOING BACK TO THIS COMMIT. NEED TO CONTINUE FROM HERE
-
-        if(this.check(TokenKind.Identifier)) {
-
-        }
+    protected void parseNestedNameSpecifierHelper(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NESTED_NAME_SPECIFIER);
 
         if(this.check(TokenKind.TemplateKeyword)) {
-
+            this.match(depth + 1, TokenKind.TemplateKeyword);
+            parseSimpleTemplateId(depth + 1);
+            this.match(depth + 1, TokenKind.ColonColon);
         }
 
         if(this.checkSimpleTemplateId()) {
+            boolean success = tryParse(() -> {
+                parseSimpleTemplateId(depth + 1);
+                this.match(depth + 1, TokenKind.ColonColon);
+            });
 
+            if (success) return;
         }
+
+        this.match(depth + 1, TokenKind.Identifier);
+        tryParse(() -> parseNestedNameSpecifierHelper(depth + 1));
     }
 
-    protected NoptrAbstractDeclarator parseNoPtrAbstractDeclarator() throws ParserException {
+    protected void parseNestedNameSpecifier(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NESTED_NAME_SPECIFIER);
+
+        if(this.checkDecltypeSpecifier()) {
+            parseDecltypeSpecifier(depth + 1);
+            match(depth + 1, TokenKind.ColonColon);
+            tryParse(() -> parseNestedNameSpecifierHelper(depth + 1));
+            return;
+        }
+
+        boolean success = tryParse(() -> {
+            parseTypeName(depth + 1);
+            match(depth + 1, TokenKind.ColonColon);
+            tryParse(() -> parseNestedNameSpecifierHelper(depth + 1));
+        });
+
+        if(success) return;
+
+        parseNamespaceName(depth + 1);
+        match(depth + 1, TokenKind.ColonColon);
+        tryParse(() -> parseNestedNameSpecifierHelper(depth + 1));
+    }
+
+    protected void parseNoPtrAbstractDeclaratorHelper(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NO_PTR_ABSTRACT_DECLARATOR);
+
         if(this.check(TokenKind.OpenParen)) {
-            this.savePos();
-            //Ptr abstract declarator
-            try {
-                this.match(TokenKind.OpenParen);
-                PtrAbstractDeclarator ptrAbstractDeclarator = parsePtrAbstractDeclarator();
-                this.match(TokenKind.OpenParen);
-                this.unsavePos();
-
-                return new PtrAbstractDeclarator(ptrAbstractDeclarator);
-            } catch(ParserException exception) {
-                this.resetPos();
-            }
-
-            ParametersAndQualifiers parametersAndQualifiers = parseParametersAndQualifiers();
-
-            this.savePos();
-            if(this.checkNoPtrAbstractDeclarator()) {
-                try {
-                    NoptrAbstractDeclarator noPtrAbstractDeclarator = parseNoPtrAbstractDeclarator();
-                    this.unsavePos();
-                    return new NoptrAbstractDeclarator(parametersAndQualifiers, noPtrAbstractDeclarator);
-                } catch (ParserException exception) {
-                    this.resetPos();
-                }
-            }
-
-            return NoptrAbstractDeclarator(parametersAndQualifiers, null);
+            parseParametersAndQualifiers();
+        } else {
+            this.match(depth + 1, TokenKind.OpenBracket);
+            parseConstantExpression();
+            this.match(depth + 1, TokenKind.CloseBracket);
+            tryParse(() -> parseAttributeSpecifierSequence(depth + 1));
         }
 
-        this.match(TokenKind.OpenBracket);
-        ConstantExpression constantExpression = parseConstantExpression();
-        this.match(TokenKind.CloseBracket);
-        AttributeSpecifierSequence attributeSpecifierSequence = null;
-
-        if(this.checkAttributeSpecifierSequence()) {
-            this.savePos();
-            try  {
-                attributeSpecifierSequence = parseAttributeSpecifierSequence();
-                this.unsavePos();
-            } catch (ParserException exception) {
-                this.resetPos();
-            }
-        }
-
-        NoptrAbstractDeclarator noPtrAbstractDeclarator = null;
-        if(this.checkNoPtrAbstractDeclarator()) {
-            this.savePos();
-            try  {
-                noPtrAbstractDeclarator = parseNoPtrAbstractDeclarator();
-                this.unsavePos();
-                return new NoptrAbstractDeclarator(constantExpression, attributeSpecifierSequence, noPtrAbstractDeclarator);
-            } catch (ParserException exception) {
-                this.resetPos();
-            }
-        }
-
-        return new NoptrAbstractDeclarator(constantExpression, attributeSpecifierSequence);
+        tryParse(() -> parseNoPtrAbstractDeclaratorHelper(depth + 1));
     }
 
-    protected TypeSpecifierSequence parseTypeSpecifierSequence() {
-        this.savePos();
-        try {
-            return new TypeSpecifierSequence(parseTypeSpecifier(), parseTypeSpecifierSequence());
-        } catch (ParserException exception) {
-            this.resetPos();
-        }
+    protected void parseNoPtrAbstractDeclarator(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NO_PTR_ABSTRACT_DECLARATOR);
 
-        TypeSpecifier typeSpecifier = parseTypeSpecifier();
-
-        if(this.checkAttributeSpecifierSequence()) {
-            return new TypeSpecifierSequence(typeSpecifier, parseAttributeSpecifierSequence());
-
-        }
-
-        return new TypeSpecifierSequence(typeSpecifier);
+        this.match(depth + 1, TokenKind.OpenParen);
+        parsePtrAbstractDeclarator(depth + 1);
+        this.match(depth + 1, TokenKind.CloseParen);
+        tryParse(() -> parseNoPtrAbstractDeclaratorHelper(depth + 1));
     }
 
-    protected TypeSpecifier parseTypeSpecifier() {
+    protected void parseTypeSpecifierSequence(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TYPE_SPECIFIER_SEQUENCE);
 
-        if(this.checkTrailingTypeSpecifier()) {
-            if(this.checkClassSpecifier()) {
-                this.savePos();
+        parseTypeSpecifier(depth + 1);
 
-                try {
-                    return new TypeSpecifier(parseClassSpecifier());
-                } catch(ParserException exception) {
-                    this.resetPos();
-                }
-            } else if(this.checkEnumSpecifier()) {
-                this.savePos();
+        boolean success = tryParse(() -> {
+            parseAttributeSpecifierSequence(depth + 1);
+            parseTypeSpecifierSequence(depth + 1);
+        });
 
-                try {
-                    return new TypeSpecifier(parseClassSpecifier());
-                } catch(ParserException exception) {
-                    this.resetPos();
-                }
+        if (success) return;
+
+        tryParse(() -> parseTypeSpecifierSequence(depth + 1));
+    }
+
+    protected void parseTypeSpecifier(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TYPE_SPECIFIER);
+
+        if(tryParse(() -> parseTrailingTypeSpecifier(depth + 1))) return;
+        if(tryParse(() -> parseClassSpecifier(depth + 1))) return;
+
+        parseEnumSpecifier(depth + 1);
+    }
+
+    protected void parseTrailingTypeSpecifier(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TRAILING_TYPE_SPECIFIER;
+
+        if(tryParse(() -> parseSimpleTypeSpecifier(depth + 1))) return;
+        if(tryParse(() -> parseElaboratedTypeSpecifier(depth + 1))) return;
+        if(tryParse(() -> parseTypenameSpecifier(depth + 1))) return;
+
+        parseCvQualifier(depth + 1);
+    }
+
+    protected void parseSimpleTypeSpecifier(int depth) throws ParserException {
+        if(this.check(new TokenKind[] {
+                TokenKind.CharKeyword,
+                TokenKind.Char16TKeyword,
+                TokenKind.Char32TKeyword,
+                TokenKind.WcharTKeyword,
+                TokenKind.BoolKeyword,
+                TokenKind.ShortKeyword,
+                TokenKind.IntKeyword,
+                TokenKind.LongKeyword,
+                TokenKind.SignedKeyword,
+                TokenKind.UnsignedKeyword,
+                TokenKind.FloatKeyword,
+                TokenKind.DoubleKeyword,
+                TokenKind.VoidKeyword,
+                TokenKind.AutoKeyword
+        })) {
+            this.match(depth + 1, new TokenKind[] {
+                    TokenKind.CharKeyword,
+                    TokenKind.Char16TKeyword,
+                    TokenKind.Char32TKeyword,
+                    TokenKind.WcharTKeyword,
+                    TokenKind.BoolKeyword,
+                    TokenKind.ShortKeyword,
+                    TokenKind.IntKeyword,
+                    TokenKind.LongKeyword,
+                    TokenKind.SignedKeyword,
+                    TokenKind.UnsignedKeyword,
+                    TokenKind.FloatKeyword,
+                    TokenKind.DoubleKeyword,
+                    TokenKind.VoidKeyword,
+                    TokenKind.AutoKeyword
+            });
+
+            return;
+        } else if(this.checkDeclTypeSpecifier()) {
+            parseDeclTypeSpecifier(depth + 1);
+            return;
+        } else if(this.check(TokenKind.ColonColon)) {
+            this.match(depth + 1, TokenKind.ColonColon);
+        }
+
+        tryParse(() -> {
+            parseNestedNameSpecifier(depth + 1);
+
+            if(this.check(TokenKind.TemplateKeyword)) {
+               this.match(depth + 1, TokenKind.TemplateKeyword);
+                parseSimpleTemplateId(depth + 1);
+                return;
             }
 
-            return new TypeSpecifier(parseTrailingTypeSpecifier());
-        } else if(this.checkClassSpecifier()) {
-            return new TypeSpecifier(parseClassSpecifier());
-        }
-        return new TypeSpecifier(parseEnumSpecifier());
+            parseTypeName(depth + 1);
+        });
+
+        parseTypeName(depth + 1);
     }
 
-    protected TrailingTypeSpecifier parseTrailingTypeSpecifier() {
-        if(this.checkSimpleTypeSpecifier()) {
-            return TrailingTypeSpecifier(parseSimpleTypeSpecifier());
-        } else if(this.checkElaboratedTypeSpecifier()) {
-            return TrailingTypeSpecifier(parseElaboratedTypeSpecifier());
-        } else if(this.checkTypenameSpecifier()) {
-            return TrailingTypeSpecifier(parseTypeNameSpecifier());
-        }
+    protected void parseTypeName(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TYPE_NAME);
 
-        return TrailingTypeSpecifier(parseCvQualifier());
+        if(tryParse(() -> parseClassName(depth + 1))) return;
+        if(tryParse(() -> parseEnumName(depth + 1))) return;
+        if(tryParse(() -> parseTypedefName(depth + 1))) return;
+
+        parseSimpleTemplateId(depth + 1);
     }
 
-    protected CvQualifier parseCvQualifier() throws ParserException {
-        return new CvQualifier(this.match(new TokenKind[] {
+    protected void parseClassName(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TYPE_NAME);
+
+        if(this.checkSimpleTemplateId()) {
+            tryParse(() -> parseSimpleTemplateId(depth + 1));
+        }
+
+        this.match(depth + 1, TokenKind.Identifier);
+    }
+
+    protected void parseEnumName(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ENUM_NAME);
+
+        this.match(depth + 1, TokenKind.Identifier);
+    }
+
+    protected void parseTypedefName(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TYPEDEF_NAME);
+
+        this.match(depth + 1, TokenKind.Identifier);
+    }
+
+    protected void parseElaboratedTypeSpecifier(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ELABORATED_TYPE_SPECIFIER);
+
+        ParseFunction tryNestedNameSpecifierIdentifier = () -> {
+            if(this.check(TokenKind.ColonColon)) {
+                this.match(depth + 1, TokenKind.ColonColon);
+            }
+
+            boolean success = tryParse(() -> {
+                parseNestedNameSpecifier(depth + 1);
+                this.match(depth + 1, TokenKind.Identifier);
+            });
+
+            if(success) return;
+
+            this.match(depth + 1, TokenKind.Identifier);
+        };
+
+        //Enum
+        if(this.check(TokenKind.EnumKeyword)) {
+            this.match(depth + 1, TokenKind.EnumKeyword);
+            tryNestedNameSpecifierIdentifier.execute();
+        }
+
+        //ClassKey
+        parseClassKey(depth + 1);
+
+        tryParse(() -> {
+            parseAttributeSpecifierSequence(depth + 1);
+            tryNestedNameSpecifierIdentifier.execute();
+        });
+
+
+        if(this.check(TokenKind.ColonColon)) {
+            this.match(depth + 1, TokenKind.ColonColon);
+        }
+
+        if(this.checkNestedNameSpecifier()) {
+            parseNestedNameSpecifier(depth + 1);
+        }
+
+        if(this.check(TokenKind.TemplateKeyword)) {
+            this.match(depth + 1, TokenKind.TemplateKeyword);
+        }
+
+        parseSimpleTemplateId(depth + 1);
+    }
+
+    protected void parseClassKey(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.CLASS_KEY);
+
+        this.match(depth + 1, new TokenKind[] {
+                TokenKind.ClassKeyword,
+                TokenKind.StructKeyword,
+                TokenKind.UnionKeyword
+        });
+    }
+
+    protected void parseCvQualifier(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.CV_QUALIFIER);
+
+        this.match(depth + 1, new TokenKind[] {
                 TokenKind.ConstKeyword,
                 TokenKind.VolatileKeyword
-        }));
+        });
     }
 
-    protected TypenameSpecifier parseTypeNameSpecifier() throws ParserException {
-        this.match(TokenKind.TypenameKeyword);
-        boolean hascolonColon = false;
+    protected void parseTypenameSpecifier(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TYPENAME_SPECIFIER);
+
+        this.match(depth + 1, TokenKind.TypenameKeyword);
         if(this.check(TokenKind.ColonColon)) {
-            this.match(TokenKind.ColonColon);
-            hascolonColon = true;
+            this.match(depth + 1, TokenKind.ColonColon);
         }
 
-        NestedNameSpecifier nestedNameSpecifier = parseNestedNameSpecifier();
+        parseNestedNameSpecifier(depth + 1);
 
         if(this.check(TokenKind.Identifier)) {
-            return new TypenameSpecifier(hascolonColon, nestedNameSpecifier, this.match(TokenKind.Identifier));
+            this.match(depth + 1, TokenKind.Identifier);
+            return;
         }
 
-        boolean hasTemplate = false;
         if(this.check(TokenKind.TemplateKeyword)) {
-            this.match(TokenKind.TemplateKeyword);
-            hasTemplate = true;
+            this.match(depth + 1, TokenKind.TemplateKeyword);
         }
 
-        return new TypenameSpecifier(hascolonColon, nestedNameSpecifier, hasTemplate, parseSimpleTemplateId());
+        parseSimpleTemplateId(depth + 1);
     }
 
-    protected SimpleTemplateId parseSimpleTemplateId() throws ParserException {
-        TemplateName templateName = parseTemplateName();
+    protected void parseSimpleTemplateId(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.SIMPLE_TEMPLATE_ID);
 
-        this.match(TokenKind.LessThan);
+        parseTemplateName();
+
+        this.match(depth + 1, TokenKind.LessThan);
 
         if(this.checkTemplateArgumentList()) {
-            TemplateArgumentList templateArgumentList = parseTemplateArgumentList();
-            this.match(TokenKind.GreaterThan);
-            return new SimpleTemplateId(templateName, templateArgumentList);
+            tryParse(() -> parseTemplateArgumentList());
         }
 
-        this.match(TokenKind.GreaterThan);
-        return new SimpleTemplateId(templateName);
+        this.match(depth + 1, TokenKind.GreaterThan);
     }
 
-    protected TemplateName parseTemplateName() {
-        return new TemplateName(this.match(TokenKind.Identifier));
+    protected void parseTemplateName(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TEMPLATE_NAME);
+
+        this.match(depth + 1, TokenKind.Identifier);
     }
 
-    protected TemplateArgumentList parseTemplateArgumentList() throws ParserException {
-        TemplateArgument templateArgument = parseTemplateArgument();
+    protected void parseTemplateArgumentList(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TEMPLATE_ARGUMENT_LIST);
 
-        boolean hasDotDotDot = false;
+       parseTemplateArgument();
+
         if(this.check(TokenKind.DotDotDot)) {
-            this.match(TokenKind.DotDotDot);
-            hasDotDotDot = true;
+            this.match(depth + 1, TokenKind.DotDotDot);
         }
 
         if(this.check(TokenKind.Comma)) {
-            return new TemplateArgumentList(templateArgument, hasDotDotDot, parseTemplateArgumentList());
+            parseTemplateArgumentList(depth + 1);
         }
 
-        return new TemplateArgumentList(templateArgument, hasDotDotDot);
+        tryParse(() -> parseTemplateArgumentList(depth + 1));
     }
 
-    protected TemplateArgument parseTemplateArgument() {
+    protected void parseTemplateArgument(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.TEMPLATE_ARGUMENT);
+
         if(this.checkConstantExpression()) {
-            return new TemplateArgument(parseConstantExpression());
+            parseConstantExpression(depth + 1);
         }
-        return new TemplateArgument(parseTypeId());
 
+        parseTypeId(depth + 1);
     }
 
-    protected Expression parseExpression() {
-        AssignmentExpression assignmentExpression = parseAssignmentExpression();
+    protected void parseExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.EXPRESSION);
+
+        parseAssignmentExpression(depth + 1);
 
         if(this.check(TokenKind.Comma)) {
-            return new Expression(assignmentExpression, parseExpression());
+            this.match(depth + 1, TokenKind.Comma);
+            parseExpression(depth + 1);
         }
-
-        return new Expression(assignmentExpression);
     }
 
-    protected AssignmentExpression parseAssignmentExpression() {
+    protected void parseAssignmentExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ASSIGNMENT_EXPRESSION);
+
         if(this.checkThrowExpression()) {
-           return AssignmentExpression(parseThrowExpression());
+           parseThrowExpression();
+            return;
         }
 
         if(this.checkLogicalOrExpression()) {
-            this.savePos();
-            try {
-                return new AssignmentExpression(parseLogicalOrExpression(), parseAssignmentOperator(), parseInitializerClause());
-            } catch(ParserException exception) {
-                this.resetPos();
-            }
+            boolean success = tryParse(() -> {
+                parseLogicalOrExpression(depth + 1);
+                parseAssignmentOperator(depth + 1);
+                parseInitializerClause(depth + 1);
+            });
+            if (success) return;
         }
-        return new AssignmentExpression(parseConditionalExpression());
+
+        parseConditionalExpression();
     }
 
-    protected AssignmentOperator parseAssignmentOperator() throws ParserException {
-        return new AssignmentOperator(this.match(new TokenKind[] {
+    protected void parseAssignmentOperator(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ASSIGNMENT_OPERATOR);
+
+        this.match(depth + 1, new TokenKind[] {
                 TokenKind.Equals,
                 TokenKind.AsteriskEquals,
                 TokenKind.SlashEquals,
@@ -783,392 +945,390 @@ public class SimpleParser implements Parser {
                 TokenKind.AmpersandEquals,
                 TokenKind.CaretEquals,
                 TokenKind.BarEquals
-        }));
-
+        });
     }
 
-    protected ThrowExpression parseThrowExpression() throws ParserException {
-        this.match(TokenKind.ThrowKeyword);
+    protected void parseThrowExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ASSIGNMENT_OPERATOR);
+
+        this.match(depth + 1, TokenKind.ThrowKeyword);
 
         if(this.checkAssignmentExpression()) {
-            return new ThrowExpression(parseAssignmentExpression());
+            tryParse(() -> parseAssignmentExpression(depth + 1));
+        }
+    }
+
+    protected void parseConstantExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.CONSTANT_EXPRESSION);
+
+        parseConditionalExpression(depth + 1);
+    }
+
+    protected void parseConditionalExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.CONDITIONAL_EXPRESSION);
+
+        parseLogicalOrExpression(depth + 1);
+
+        if(!this.check(TokenKind.Question)) {
+            return;
         }
 
-        return new ThrowExpression();
+        this.match(depth + 1, TokenKind.Question);
+        parseExpression(depth + 1);
+        this.match(depth + 1, TokenKind.Colon);
+        parseAssignmentExpression(depth + 1);
     }
 
-    protected ConstantExpression parseConstantExpression() {
-        return new ConstantExpression(parseConditionalExpression());
-    }
+    protected void parseLogicalOrExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.CONDITIONAL_EXPRESSION);
 
-    protected ConditionalExpression parseConditionalExpression() throws ParserException {
-        LogicalOrExpression logicalOrExpression = parseLogicalOrExpression();
-        if(this.check(TokenKind.Question)) {
-            this.match(TokenKind.Question);
-            Expression expression = parseExpression();
-            this.match(TokenKind.Colon);
-            AssignmentExpression assignmentExpression = parseAssignmentExpression();
-            return new ConditionalExpression(logicalOrExpression, expression, assignmentExpression);
-        }
-        return new ConditionalExpression(LogicalOrExpression);
-    }
+        parseLogicalAndExpression(depth + 1);
 
-    protected LogicalOrExpression parseLogicalOrExpression() throws ParserException {
-        LogicalAndExpression logicalAndExpression = parseLogicalAndExpression();
-
-        if(this.check(TokenKind.BarBar)) {
-            this.match(TokenKind.BarBar);
-            return new LogicalOrExpression(logicalAndExpression, parseLogicalAndExpression());
+        if(!this.check(TokenKind.BarBar)) {
+            return;
         }
 
-        return new LogicalOrExpression(logicalAndExpression);
+        this.match(depth + 1, TokenKind.BarBar);
+        parseLogicalOrExpression(depth + 1);
     }
 
-    protected LogicalAndExpression parseLogicalAndExpression() throws ParserException {
-        InclusiveOrExpression inclusiveOrExpression = parseInclusiveOrExpression();
+    protected void parseLogicalAndExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.LOGICAL_AND_EXPRESSION;
 
-        if(this.check(TokenKind.AmpersandAmpersand)) {
-            this.match(TokenKind.AmpersandAmpersand);
-            return new LogicalAndExpression(inclusiveOrExpression, parseInclusiveOrExpression());
+        parseInclusiveOrExpression(depth + 1);
+
+        if(!this.check(TokenKind.AmpersandAmpersand)) {
+            return;
         }
 
-        return new LogicalAndExpression(inclusiveOrExpression);
+        this.match(depth + 1, TokenKind.AmpersandAmpersand);
+        parseLogicalAndExpression(depth + 1);
     }
 
-    protected InclusiveOrExpression parseInclusiveOrExpression() throws ParserException {
-        ExclusiveOrExpression exclusiveOrExpression = parseExclusiveOrExpression();
+    protected void parseInclusiveOrExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.INCLUSIVE_OR_EXPRESSION;
 
-        if(this.check(TokenKind.Bar)) {
-            this.match(TokenKind.Bar);
-            return new InclusiveOrExpression(exclusiveOrExpression, parseExclusiveOrExpression());
+        parseExclusiveOrExpression(depth + 1);
+
+        if(!this.check(TokenKind.Bar)) {
+            return;
         }
 
-        return new InclusiveOrExpression(exclusiveOrExpression);
+        this.match(depth + 1, TokenKind.Bar);
+        parseInclusiveOrExpression(depth + 1);
     }
 
-    protected ExclusiveOrExpression parseExclusiveOrExpression() throws ParserException {
-        AndExpression andExpression = parseAndExpression();
+    protected void parseExclusiveOrExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.EXCLUSIVE_OR_EXPRESSION;
 
-        if(this.check(TokenKind.Caret)) {
-            this.match(TokenKind.Caret);
-            return new ExclusiveOrExpression(andExpression, parseAndExpression());
+        parseAndExpression(depth + 1);
+
+        if(!this.check(TokenKind.Caret)) {
+            return;
         }
 
-        return new ExclusiveOrExpression(andExpression);
+        this.match(depth + 1, TokenKind.Caret);
+        parseExclusiveOrExpression(depth + 1);
     }
 
-    protected AndExpression parseAndExpression() throws ParserException {
-        EqualityExpression equalityExpression = parseEqualityExpression();
+    protected void parseAndExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.AND_EXPRESSION);
 
-        if(this.check(TokenKind.Ampersand)) {
-            this.match(TokenKind.Ampersand);
-            return new AndExpression(equalityExpression, parseEqualityExpression());
+        parseEqualityExpression(depth + 1);
+
+        if(!this.check(TokenKind.Ampersand)) {
+            return;
         }
 
-        return new AndExpression(equalityExpression);
+        this.match(depth + 1, TokenKind.Ampersand);
+        parseAndExpression(depth + 1);
     }
 
-    protected EqualityExpression parseEqualityExpression() throws ParserException {
-        RelationalExpression relationalExpression = parseRelationalExpression();
+    protected void parseEqualityExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.EQUALITY_EXPRESSION);
 
-        if(this.check(new TokenKind[] {
+        parseRelationalExpression(depth + 1);
+
+        if(!this.check(new TokenKind[] {
                 TokenKind.EqualsEquals,
                 TokenKind.ExclamationEquals
         })) {
-            Token operator = this.match(new TokenKind[] {
-                    TokenKind.EqualsEquals,
-                    TokenKind.ExclamationEquals
-            });
-
-            return new EqualityExpression(relationalExpression, operator, parseRelationalExpression());
+            return;
         }
 
-        return new EqualityExpression(parseRelationalExpression());
+        this.match(depth + 1, new TokenKind[] {
+                TokenKind.EqualsEquals,
+                TokenKind.ExclamationEquals
+        });
+
+        parseEqualityExpression(depth + 1);
     }
 
-    protected RelationalExpression parseRelationalExpression() throws ParserException {
-        ShiftExpression shiftExpression = parseShiftExpression();
+    protected void parseRelationalExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.RELATIONAL_EXPRESSION);
 
-        if(this.check(new TokenKind[] {
+        parseShiftExpression(depth + 1);
+
+        if(!this.check(new TokenKind[] {
                 TokenKind.LessThan,
-                TokenKind.LessThanEquals,
                 TokenKind.GreaterThan,
+                TokenKind.LessThanEquals,
                 TokenKind.GreaterThanEquals
         })) {
-            Token operator = this.match(new TokenKind[]{
-                    TokenKind.LessThan,
-                    TokenKind.LessThanEquals,
-                    TokenKind.GreaterThan,
-                    TokenKind.GreaterThanEquals
-            });
-
-            return new RelationalExpression(shiftExpression, operator, parseShiftExpression());
+            return;
         }
 
-        return new RelationalExpression(shiftExpression);
+        this.match(depth + 1, new TokenKind[] {
+                TokenKind.LessThan,
+                TokenKind.GreaterThan,
+                TokenKind.LessThanEquals,
+                TokenKind.GreaterThanEquals
+        });
+
+        parseRelationalExpression(depth + 1);
     }
 
-    protected ShiftExpression parseShiftExpression() throws ParserException {
-        AdditiveExpression additiveExpression = parseAdditiveExpression();
+    protected void parseShiftExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.SHIFT_EXPRESSION);
 
-        if(this.check(new TokenKind[] {
+        parseAdditiveExpression(depth + 1);
+
+        if(!this.check(new TokenKind[] {
                 TokenKind.LessThanLessThan,
                 TokenKind.GreaterThanGreaterThan,
         })) {
-            Token operator = this.match(new TokenKind[]{
-                    TokenKind.LessThanLessThan,
-                    TokenKind.GreaterThanGreaterThan,
-            });
-
-            return new ShiftExpression(additiveExpression, operator, parseAdditiveExpression());
+            return;
         }
 
-        return new ShiftExpression(additiveExpression);
+        this.match(depth + 1, new TokenKind[] {
+                TokenKind.LessThanLessThan,
+                TokenKind.GreaterThanGreaterThan,
+        });
+
+        parseShiftExpression(depth + 1);
     }
 
-    protected AdditiveExpression parseAdditiveExpression() throws ParserException {
-        MultiplicativeExpression multiplicativeExpression = parseMultiplicativeExpression();
+    protected void parseAdditiveExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ADDITIVE_EXPRESSION);
 
-        if(this.check(new TokenKind[] {
+        parseMultiplicativeExpression(depth + 1);
+
+        if(!this.check(new TokenKind[] {
                 TokenKind.Plus,
                 TokenKind.Minus,
         })) {
-            Token operator = this.match(new TokenKind[]{
-                    TokenKind.Plus,
-                    TokenKind.Minus,
-            });
-
-            return new AdditiveExpression(multiplicativeExpression, operator, parseMultiplicativeExpression());
+            return;
         }
 
-        return new AdditiveExpression(multiplicativeExpression);
+        this.match(depth + 1, new TokenKind[] {
+                TokenKind.Plus,
+                TokenKind.Minus,
+        });
+
+        parseAdditiveExpression(depth + 1);
     }
 
-    protected MultiplicativeExpression parseMultiplicativeExpression() throws ParserException {
-        PmExpression pmExpression = parsePmExpression();
+    protected void parseMultiplicativeExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.MULTIPLICATIVE_EXPRESSION);
 
-        if(this.check(new TokenKind[] {
+        parsePmExpression(depth + 1);
+
+        if(!this.check(new TokenKind[] {
                 TokenKind.Asterisk,
                 TokenKind.Slash,
                 TokenKind.Percent
         })) {
-            Token operator = this.match(new TokenKind[]{
-                    TokenKind.Asterisk,
-                    TokenKind.Slash,
-                    TokenKind.Percent
-            });
-
-            return new MultiplicativeExpression(pmExpression, operator, parsePmExpression());
+            return;
         }
 
-        return new MultiplicativeExpression(pmExpression);
+        this.match(depth + 1, new TokenKind[] {
+                TokenKind.Asterisk,
+                TokenKind.Slash,
+                TokenKind.Percent
+        });
+
+        parseMultiplicativeExpression(depth + 1);
     }
 
-    protected PmExpression parsePmExpression() throws ParserException {
-        CastExpression castExpression = parseCastExpression();
+    protected void parsePmExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.PM_EXPRESSION);
 
-        if(this.check(new TokenKind[] {
+        parseCastExpression(depth + 1);
+
+        if(!this.check(new TokenKind[] {
                 TokenKind.DotAsterisk,
                 TokenKind.MinusGreaterThanAsterisk
         })) {
-            Token operator = this.match(new TokenKind[]{
-                    TokenKind.DotAsterisk,
-                    TokenKind.MinusGreaterThanAsterisk
-            });
-
-            return new PmExpression(castExpression, operator, parseCastExpression());
+            return;
         }
 
-        return new PmExpression(castExpression);
+        this.match(depth + 1, new TokenKind[] {
+                TokenKind.DotAsterisk,
+                TokenKind.MinusGreaterThanAsterisk
+        });
+
+        parsePmExpression(depth + 1);
     }
 
-    protected CastExpression parseCastExpression() throws ParserException {
-        this.savePos();
-        if(this.check(TokenKind.OpenParen)) {
-            try {
-                this.match(TokenKind.OpenParen);
-                TypeId typeId = parseTypeId();
-                this.match(TokenKind.CloseParen);
-                return new CastExpression(typeId, parseCastExpression());
-            } catch(ParserException exception) {
-                this.resetPos();
-            }
-        }
-        return new CastExpression(parseUnaryExpression());
+    protected void parseCastExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.CAST_EXPRESSION);
+
+        tryParse(() -> {
+            this.match(depth + 1, TokenKind.OpenParen);
+            parseTypeId(depth + 1);
+            this.match(depth + 1, TokenKind.CloseParen);
+            parseCastExpression(depth + 1);
+        });
+
+        parseUnaryExpression();
     }
 
-    protected UnaryExpression parseUnaryExpression() throws ParserException {
-        //New expression
-        this.savePos();
-        try {
-            return new UnaryExpression(parseNewExpression());
-        } catch (ParserException exception) {
-            this.resetPos();
-        }
-
-        //Delete expression
-        this.savePos();
-        try {
-            return new UnaryExpression(parseDeleteExpression());
-        } catch (ParserException exception) {
-            this.resetPos();
-        }
-
-        //Postfix-expression
-        this.savePos();
-        try {
-            return new UnaryExpression(parsePostfixExpression());
-        } catch (ParserException exception) {
-            this.resetPos();
-        }
+    protected void parseUnaryExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.UNARY_EXPRESSION);
 
         //Alignof
         if(this.check(TokenKind.AlignofKeyword)) {
-            this.match(TokenKind.AlignofKeyword);
-            this.match(TokenKind.OpenParen);
-            TypeId typeId = parseTypeId();
-            this.match(TokenKind.CloseParen);
-            return new UnaryExpression(typeId);
+            this.match(depth + 1, TokenKind.AlignofKeyword);
+            this.match(depth + 1, TokenKind.OpenParen);
+            parseTypeId(depth + 1);
+            this.match(depth + 1, TokenKind.CloseParen);
+            return;
         }
 
-        //No except
-        if(this.checkNoexceptExpression()) {
-            return new UnaryExpression(parseNoexceptExpression());
-        }
-
-
-        //++, --
-        if ((this.check(TokenKind.Plus) && this.check(TokenKind.Plus, 1)) ||
-                (this.check(TokenKind.Minus) && this.check(TokenKind.Minus, 1))) {
-            Token operator1 = this.match(new TokenKind[] {
-                    TokenKind.Plus,
-                    TokenKind.Minus
-            });
-            Token operator2 = this.match(new TokenKind[]{
-                    TokenKind.Plus,
-                    TokenKind.Minus
-            });
-            return new UnaryExpression(operator1, operator2, parseCastExpression());
-        }
-
-        // unary-operator cast-expression
-        if(this.checkUnaryOperator()) {
-            UnaryOperator operator = parseUnaryOperator();
-            return new UnaryExpression(operator, parseCastExpression());
-        }
-
+        boolean success = false;
+        //Sizeof
         if(this.check(TokenKind.SizeofKeyword)) {
-            //sizeof ( type-id )
-            this.savePos();
-            try {
-                this.match(TokenKind.OpenParen);
-                TypeId typeId = parseTypeId();
-                this.match(TokenKind.CloseParen);
-                return new UnaryExpression(typeId);
-            } catch (ParserException exception) {
-                this.resetPos();
-            }
+            this.match(depth + 1, TokenKind.SizeofKeyword);
+            success = tryParse(() -> {
+                this.match(depth + 1, TokenKind.DotDotDot);
+                this.match(depth + 1, TokenKind.OpenParen);
+                this.match(depth + 1, TokenKind.Identifier);
+                this.match(depth + 1, TokenKind.CloseParen);
 
-            //Sizeof ( identifier )
-            this.savePos();
-            try {
-                this.match(TokenKind.DotDotDot);
-                this.match(TokenKind.OpenParen);
-                Token identifier = this.match(TokenKind.Identifier);
-                this.match(TokenKind.CloseParen);
-                return new UnaryExpression(identifier);
-            } catch (ParserException exception) {
-                this.resetPos();
-            }
+            });
+            if (success) return;
 
-            //sizeof unary-expression
-            this.match(TokenKind.SizeofKeyword);
-            this.savePos();
-            try {
-                return new UnaryExpression(parseUnaryExpression());
-            } catch (ParserException exception) {
-                this.resetPos();
-            }
+            success = tryParse(() -> {
+                this.match(depth + 1, TokenKind.OpenParen);
+                parseTypeId(depth + 1);
+                this.match(depth + 1, TokenKind.CloseParen);
+
+            });
+
+            if (success) return;
+
+            parseUnaryExpression(depth + 1);
+            return;
         }
+
+        //New
+        if(this.checkNewExpression() && tryParse(() -> parseNewExpression(depth + 1))) return;
+        //Delete
+        if(this.checkDeleteExpression() && tryParse(() -> parseDeleteExpression(depth + 1))) return;
+        //Noexcept
+        if(this.checkNoexceptExpression() && tryParse(() -> parseNoexceptExpression(depth + 1))) return;
+
+
+        // ++, --
+        if(this.check(new TokenKind[] {
+                TokenKind.PlusPlus,
+                TokenKind.MinusMinus
+        })) {
+            this.match(depth + 1, new TokenKind[] {
+                    TokenKind.PlusPlus,
+                    TokenKind.MinusMinus
+            });
+
+            parseCastExpression(depth + 1);
+            return;
+        }
+
+        // unary operator
+        if(this.checkUnaryOperator()) {
+            parseUnaryOperator(depth + 1);
+            parseCastExpression(depth + 1);
+            return;
+        }
+
+        // postfix
+        parsePostifxExpression(depth + 1);
     }
 
-    protected UnaryOperator parseUnaryOperator() throws ParserException {
-        return new UnaryOperator(this.match(new TokenKind[] {
+    protected void parseUnaryOperator(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.UNARY_OPERATOR);
+
+        this.match(depth + 1, new TokenKind[] {
                 TokenKind.Asterisk,
                 TokenKind.Ampersand,
                 TokenKind.Plus,
                 TokenKind.Minus,
                 TokenKind.Exclamation,
                 TokenKind.Tilde
-        }));
+        });
     }
 
-    protected DeleteExpression parseDeleteExpression() throws ParserException {
-        boolean hasColonColon = false;
+    protected void parseDeleteExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.UNARY_OPERATOR);
+
         if(this.check(TokenKind.ColonColon)) {
-            this.match(TokenKind.ColonColon);
-            hasColonColon = true;
+           this.match(depth + 1, TokenKind.ColonColon);
         }
 
-        this.match(TokenKind.DeleteKeyword);
+        this.match(depth + 1, TokenKind.DeleteKeyword);
 
         if(this.check(TokenKind.OpenBracket)) {
-            this.savePos();
-            try {
-                this.match(TokenKind.OpenBracket);
-                this.match(TokenKind.CloseBracket);
-                return new DeleteExpression(hasColonColon, true,  parseCastExpression());
-            } catch(ParserException exception) {
-                this.resetPos();
-            }
+
+            boolean success = this.tryParse(() -> {
+                this.match(depth + 1, TokenKind.OpenBracket);
+                this.match(depth + 1, TokenKind.CloseBracket);
+                parseCastExpression(depth + 1);
+            });
+
+            if (success) return;
         }
 
-        return new DeleteExpression(hasColonColon, false, parseCastExpression());
+        parseCastExpression(depth + 1);
     }
 
-    protected NoexceptExpression parseNoexceptExpression() throws ParserException {
-        this.match(TokenKind.NoexceptKeyword);
-        this.match(TokenKind.OpenParen);
-        Expression expression = parseExpression();
-        this.match(TokenKind.CloseParen);
-        return new NoexceptExpression(expression);
+    protected void parseNoexceptExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NOEXCEPT_EXPRESSION);
+
+        this.match(depth + 1, TokenKind.NoexceptKeyword);
+        this.match(depth + 1, TokenKind.OpenParen);
+        parseExpression(depth + 1);
+        this.match(depth + 1, TokenKind.CloseParen);
     }
 
-    protected NewExpression parseNewExpression() throws ParserException {
-        boolean hasColonColon = false;
+    protected void parseNewExpression(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NOEXCEPT_EXPRESSION);
+
         if(this.check(TokenKind.ColonColon)) {
-            this.match(TokenKind.ColonColon);
-            hasColonColon = true;
+            this.match(depth + 1, TokenKind.ColonColon);
         }
 
-        this.match(TokenKind.NewKeyword);
-        NewPlacement newPlacement = null;
-        TypeId typeId = null;
-        NewTypeId newTypeId = null;
-        NewInitializer newInitialzer = null;
+        this.match(depth + 1, TokenKind.NewKeyword);
 
-        if(this.check(TokenKind.OpenParen)) {
-            this.savePos();
-            try {
-                newPlacement = parseNewPlacement();
-            } catch (ParserException exception) {
-                this.resetPos();
+        ParseFunction parseAfterNewPlacement = () -> {
+            if(this.check(TokenKind.OpenParen)) {
+                this.match(depth + 1, TokenKind.OpenParen);
+                parseTypeId(depth + 1);
+                this.match(depth + 1, TokenKind.OpenParen);
+            } else {
+                parseNewTypeId(depth + 1);
             }
-        }
 
-        if(this.check(TokenKind.OpenParen)) {
-            typeId = parseTypeId();
-        } else {
-            newTypeId = parseNewTypeId();
-        }
+            tryParse(() -> parseNewInitializer(depth + 1));
+        };
 
-        if(this.checkNewInitializer()) {
-            newInitialzer = parseNewInitializer();
-        }
+        boolean success = tryParse(() -> {
+            parseNewPlacement(depth + 1);
+            parseAfterNewPlacement.execute();
+        });
 
-        return new NewExpression(hasColonColon, newPlacement, newTypeId, typeId, newInitialzer);
+        if (success) return;
+
+        parseAfterNewPlacement.execute();
     }
-
 
     /*
         Check functions
