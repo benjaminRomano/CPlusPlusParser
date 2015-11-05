@@ -110,6 +110,7 @@ public class SimpleScanner implements Scanner {
         keywordMap.put("or_eq", TokenKind.OrEq);
         keywordMap.put("xor", TokenKind.Xor);
         keywordMap.put("xor_eq", TokenKind.XorEq);
+        keywordMap.put("final", TokenKind.FinalKeyword);
 
         return keywordMap;
     }

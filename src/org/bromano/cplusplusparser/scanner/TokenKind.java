@@ -154,5 +154,5 @@ public enum TokenKind {
     OrEq,
     Xor,
     XorEq,
-    Identifier
+    FinalKeyword, Identifier
 }
