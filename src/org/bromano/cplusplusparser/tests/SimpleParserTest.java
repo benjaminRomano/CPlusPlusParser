@@ -1,23 +1,24 @@
 package org.bromano.cplusplusparser.tests;
 
 import org.bromano.cplusplusparser.parser.Parser;
-import org.bromano.cplusplusparser.parse.SimpleParser;
 import org.bromano.cplusplusparser.parser.ParserException;
+import org.bromano.cplusplusparser.parser.SimpleParser;
 import org.bromano.cplusplusparser.scanner.SimpleScanner;
 import org.bromano.cplusplusparser.scanner.Token;
 
 import java.util.List;
+import java.util.Stack;
 
 public class SimpleParserTest {
 
-    @FunctionalInterface
-    public interface ParseFunction {
-        void execute() throws ParserException;
-    }
-
     @org.junit.Test
     public void testParse() throws Exception {
-        Parser parser = new SimpleParser(getTokens("; ;"));
+        Parser parser = new SimpleParser(getTokens("int a()"));
+        printStack(parser.parse());
+    }
+
+    public void printStack(Stack<String> stack) {
+        while(!stack.isEmpty()) System.out.println(stack.pop());
     }
 
 

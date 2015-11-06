@@ -111,6 +111,7 @@ public class SimpleScanner implements Scanner {
         keywordMap.put("xor", TokenKind.Xor);
         keywordMap.put("xor_eq", TokenKind.XorEq);
         keywordMap.put("final", TokenKind.FinalKeyword);
+        keywordMap.put("override", TokenKind.OverrideKeyword);
 
         return keywordMap;
     }
