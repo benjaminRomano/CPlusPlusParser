@@ -139,7 +139,7 @@ public class SimpleParser implements Parser {
     protected String createNode(int depth, String text) {
         StringBuilder node = new StringBuilder();
         for (int i = 0; i < depth; i++) {
-            node.append("\t");
+            node.append("  ");
         }
         node.append(text);
         return node.toString();
@@ -269,6 +269,7 @@ public class SimpleParser implements Parser {
     protected void parseDeclaration(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.DECLARATION);
 
+        //TODO: COMPLETE THIS
         if(this.checkFunctionDefinition() && tryParse(() -> parseFunctionDefinition(depth + 1))) return;
 
         parseEmptyDeclaration(depth + 1);
@@ -368,11 +369,11 @@ public class SimpleParser implements Parser {
     protected void parseCompoundStatement(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.COMPOUND_STATEMENT);
 
-        this.match(depth + 1, TokenKind.OpenBracket);
+        this.match(depth + 1, TokenKind.OpenBrace);
         if(this.checkStatementSequence()) {
             parseStatementSequence(depth + 1);
         }
-        this.match(depth + 1, TokenKind.CloseBracket);
+        this.match(depth + 1, TokenKind.CloseBrace);
     }
 
     protected void parseStatementSequence(int depth) throws ParserException {
@@ -406,9 +407,130 @@ public class SimpleParser implements Parser {
     protected void parseDeclarationStatement(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.DECLARATION_STATEMENT);
 
-        //TODO: Implement this
-        throw NotImplementedException();
         parseBlockDeclaration(depth + 1);
+    }
+
+    protected void parseBlockDeclaration(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.BLOCK_DECLARATION);
+
+        if(this.checkSimpleDeclaration() && tryParse(() -> parseSimpleDeclaration(depth + 1))) return;
+        if(this.checkAsmDefinition() && tryParse(() -> parseAsmDefinition(depth + 1))) return;
+        if(this.checkUsingDeclaration() && tryParse(() -> parseUsingDeclaration(depth + 1))) return;
+        if(this.checkUsingDirective() && tryParse(() -> parseUsingDirective(depth + 1))) return;
+        if(this.checkStaticAssertDeclaration() && tryParse(() -> parseStaticAssertDeclaration(depth + 1))) return;
+        if(this.checkAliasDeclaration() && tryParse(() -> parseAliasDeclaration(depth + 1))) return;
+
+        parseOpaqueEnumDeclaration(depth + 1);
+    }
+
+    protected void parseSimpleDeclaration(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.SIMPLE_DECLARATION);
+        if(this.checkAttributeSpecifierSequence()) {
+            parseAttributeSpecifierSequence(depth + 1);
+        }
+
+        if(this.checkAttributeSpecifierSequence()) {
+            parseDeclSpecifierSequence(depth + 1);
+        }
+
+        if(this.checkAttributeSpecifierSequence()) {
+            parseInitDeclaratorList(depth + 1);
+        }
+        this.match(depth + 1, TokenKind.Semicolon);
+    }
+
+    protected void parseInitDeclaratorList(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.INIT_DECLARATOR_LIST);
+
+        parseInitDeclarator(depth + 1);
+
+        if(this.checkInitDeclaratorList()) {
+            parseInitDeclaratorList(depth + 1);
+        }
+    }
+
+    protected void parseInitDeclarator(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.INIT_DECLARATOR);
+
+        parseDeclarator(depth + 1);
+
+        if(this.checkInitializer()) {
+            tryParse(() -> parseInitializer(depth + 1));
+        }
+    }
+
+    protected void parseInitializer(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.INITIALIZER);
+
+        if(this.checkBraceOrEqualInitializer()) {
+            parseBraceOrEqualInitializer(depth + 1);
+            return;
+        }
+
+        this.match(depth + 1, TokenKind.OpenParen);
+        parseExpressionList(depth + 1);
+        this.match(depth + 1, TokenKind.CloseParen);
+    }
+
+    protected void parseBraceOrEqualInitializer(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.BRACE_OR_EQUAL_INITIALIZER);
+
+        if(this.check(TokenKind.Equals)) {
+            this.match(depth + 1, TokenKind.Equals);
+            parseInitializerClause(depth + 1);
+            return;
+        }
+
+        parseBracedInitList(depth + 1);
+    }
+
+    protected void parseAsmDefinition(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ASM_DEFINITION);
+
+        this.match(depth + 1, TokenKind.AsmKeyword);
+        this.match(depth + 1, TokenKind.StringLiteral);
+        this.match(depth + 1, TokenKind.OpenParen);
+        this.match(depth + 1, TokenKind.CloseParen);
+        this.match(depth + 1, TokenKind.Semicolon);
+    }
+
+    protected void parseUsingDirective(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.USING_DIRECTIVE);
+
+        if(this.checkAttributeSpecifierSequence()) {
+            parseAttributeSpecifierSequence(depth + 1);
+        }
+
+        this.match(depth + 1, TokenKind.UsingKeyword);
+        this.match(depth + 1, TokenKind.NamespaceKeyword);
+
+        if(this.check(TokenKind.ColonColon)) {
+           boolean success = tryParse(() -> parseNestedNameSpecifier(depth + 1));
+
+            if(!success) {
+                this.match(depth + 1, TokenKind.ColonColon);
+            }
+        } else if(this.checkNestedNameSpecifier()) {
+            parseNestedNameSpecifier(depth + 1);
+        }
+
+        parseNamespaceName(depth + 1);
+        this.match(depth + 1, TokenKind.Semicolon);
+    }
+
+    protected void parseOpaqueEnumDeclaration(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.OPAQUE_ENUM_DECLARATION);
+        parseEnumKey(depth + 1);
+        if(this.checkAttributeSpecifierSequence()) {
+            parseAttributeSpecifierSequence(depth + 1);
+        }
+
+        this.match(depth + 1, TokenKind.Identifier);
+
+        if(this.checkEnumBase()) {
+            parseEnumBase(depth + 1);
+        }
+        this.match(depth + 1, TokenKind.Semicolon);
     }
 
     protected void parseIterationStatement(int depth) throws ParserException {
@@ -3932,5 +4054,18 @@ public class SimpleParser implements Parser {
                 this.checkExpression() ||
                 this.checkDeclSpecifierSequence();
     }
-}
 
+    protected boolean checkEnumBase() {
+        return this.check(TokenKind.Colon);
+    }
+
+    protected boolean checkInitializer() {
+        return this.checkBraceOrEqualInitializer() ||
+                this.check(TokenKind.OpenParen);
+    }
+
+    protected boolean checkBraceOrEqualInitializer() {
+        return this.checkBracedInitList() ||
+                this.check(TokenKind.Equals);
+    }
+}

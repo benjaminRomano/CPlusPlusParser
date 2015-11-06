@@ -13,7 +13,7 @@ public class SimpleParserTest {
 
     @org.junit.Test
     public void testParse() throws Exception {
-        Parser parser = new SimpleParser(getTokens("int a()"));
+        Parser parser = new SimpleParser(getTokens("int a(){ 10 * 5 + 5; }"));
         printStack(parser.parse());
     }
 
