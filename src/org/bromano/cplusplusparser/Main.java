@@ -1,18 +1,57 @@
 package org.bromano.cplusplusparser;
+import org.bromano.cplusplusparser.parser.Parser;
+import org.bromano.cplusplusparser.parser.ParserException;
+import org.bromano.cplusplusparser.parser.SimpleParser;
 import org.bromano.cplusplusparser.scanner.*;
+import org.bromano.cplusplusparser.scanner.Scanner;
 
 import java.io.*;
-import java.util.List;
+import java.util.*;
 
 public class Main {
 
     public static void main(String[] args) {
-        Scanner scanner = new SimpleScanner();
+
 
         if(args.length >= 1) {
-            scanner.setText(loadFile(args[0]));
-            printTokens(scanner.lex());
+            run(loadFile(args[0]));
+            return;
         }
+
+        run(readFromSystemIn());
+    }
+
+    public static void run(String text) {
+        Scanner scanner = new SimpleScanner(text);
+
+        List<Token> tokens = scanner.lex();
+
+        printTokens(tokens);
+
+        Parser parser = new SimpleParser(tokens);
+
+        try {
+            Stack<String> parseTree = parser.parse();
+            printStack(parseTree);
+        } catch (ParserException exception) {
+            exception.printStackTrace();
+        }
+    }
+
+    public static void printStack(Stack<String> stack) {
+        while(!stack.isEmpty()) System.out.println(stack.pop());
+    }
+
+    public static String readFromSystemIn() {
+        java.util.Scanner systemInScanner = new java.util.Scanner(System.in);
+
+        StringBuilder inputStringBuilder = new StringBuilder();
+        while(systemInScanner.hasNext()) {
+            inputStringBuilder.append(systemInScanner.nextLine());
+        }
+
+        return inputStringBuilder.toString();
+
     }
 
     public static void printTokens(List<Token> tokens) {

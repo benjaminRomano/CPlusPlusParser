@@ -2,11 +2,11 @@ package org.bromano.cplusplusparser.parser;
 
 import org.bromano.cplusplusparser.scanner.Token;
 import org.bromano.cplusplusparser.scanner.TokenKind;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
+import java.util.stream.Collectors;
 
 import static org.bromano.cplusplusparser.parser.NodeType.ENUMERATOR_DEFINITION;
 
@@ -25,7 +25,7 @@ public class SimpleParser implements Parser {
     }
 
     public SimpleParser() {
-        this.setTokens(new ArrayList<Token>());
+        this.setTokens(new ArrayList<>());
     }
 
     public void setTokens(List<Token> tokens) {
@@ -38,16 +38,7 @@ public class SimpleParser implements Parser {
     }
 
     protected List<Token> filterEOFToken(List<Token> tokens) {
-        List<Token> filteredTokens = new ArrayList<>();
-
-        for (Token token : tokens) {
-            if (token.kind != TokenKind.EndOfFile) {
-                filteredTokens.add(token);
-            }
-
-        }
-
-        return filteredTokens;
+        return tokens.stream().filter(token -> token.kind != TokenKind.EndOfFile).collect(Collectors.toList());
     }
 
     //NOTE: For testing purposes
@@ -100,21 +91,6 @@ public class SimpleParser implements Parser {
 
     protected boolean check(TokenKind kind) {
         return this.pos < this.end && this.tokens.get(this.pos).kind == kind;
-    }
-
-    protected boolean check(TokenKind[] kinds, int lookahead) {
-        if (this.pos + lookahead >= this.end) {
-            return false;
-        }
-
-        TokenKind currTokenKind = this.tokens.get(pos + lookahead).kind;
-        for (TokenKind kind : kinds) {
-            if (currTokenKind == kind) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     protected boolean check(TokenKind[] kinds) {
@@ -212,7 +188,7 @@ public class SimpleParser implements Parser {
     }
 
     public <T> Stack<T> reverseStack(Stack<T> stack) {
-        Stack<T> reversedStack = new Stack<T>();
+        Stack<T> reversedStack = new Stack<>();
         while(!stack.isEmpty()) {
             reversedStack.push(stack.pop());
         }
@@ -238,15 +214,6 @@ public class SimpleParser implements Parser {
         return false;
     }
 
-    protected boolean tryParse(ParseFunction[] funcs) {
-        for (ParseFunction func : funcs) {
-            if (tryParse(func)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     protected void parseTranslationUnit(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.TRANSLATION_UNIT);
 
@@ -269,10 +236,120 @@ public class SimpleParser implements Parser {
     protected void parseDeclaration(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.DECLARATION);
 
-        //TODO: COMPLETE THIS
+        if(this.checkBlockDeclaration() && tryParse(() -> parseBlockDeclaration(depth + 1))) return;
         if(this.checkFunctionDefinition() && tryParse(() -> parseFunctionDefinition(depth + 1))) return;
+        if(this.checkTemplateDeclaration() && tryParse(() -> parseTemplateDeclaration(depth + 1))) return;
+        if(this.checkExplicitInstantiation() && tryParse(() -> parseExplicitInstantiation(depth + 1))) return;
+        if(this.checkExplicitSpecialization() && tryParse(() -> parseExplicitSpecialization(depth + 1))) return;
+        if(this.checkLinkageSpecification() && tryParse(() -> parseLinkageSpecification(depth + 1))) return;
+        if(this.checkNamespaceDefinition() && tryParse(() -> parseNamespaceDefinition(depth + 1))) return;
+        if(this.checkAttributeDeclaration() && tryParse(() -> parseAttributeDeclaration(depth + 1))) return;
 
         parseEmptyDeclaration(depth + 1);
+    }
+
+    protected void parseAttributeDeclaration(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ATTIRBUTE_DECLARATION);
+        parseAttributeSpecifierSequence(depth + 1);
+        this.match(depth + 1, TokenKind.Semicolon);
+    }
+
+    protected void parseNamespaceDefinition(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NAMESPACE_DEFIITION);
+
+        if(this.checkNamedNamespaceDefinition() && tryParse(() -> parseNamedNamespaceDefinition(depth + 1))) return;
+
+        parseUnnamedNamespaceDefinition(depth + 1);
+    }
+
+    protected void parseUnnamedNamespaceDefinition(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NAMED_NAMESPACE_DEFINITION);
+
+        if (this.check(TokenKind.InlineKeyword)) {
+            this.match(depth + 1, TokenKind.InlineKeyword);
+        }
+
+        this.match(depth + 1, TokenKind.NamespaceKeyword);
+        this.match(depth + 1, TokenKind.OpenBrace);
+        parseNamespaceBody(depth + 1);
+        this.match(depth + 1, TokenKind.CloseBrace);
+    }
+
+    protected void parseNamedNamespaceDefinition(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NAMED_NAMESPACE_DEFINITION);
+
+        if(this.checkOriginalNamespaceDefinition() && this.tryParse(() -> parseOriginalNamespaceDefinition(depth + 1))) return;
+        parseExtensionNamespaceDefinition(depth + 1);
+    }
+
+    protected void parseOriginalNamespaceDefinition(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.ORIGINAL_NAMESPACE_DECLARATION);
+
+        if (this.check(TokenKind.InlineKeyword)) {
+            this.match(depth + 1, TokenKind.InlineKeyword);
+        }
+
+        this.match(depth + 1, TokenKind.NamespaceKeyword);
+        this.match(depth + 1, TokenKind.Identifier);
+        this.match(depth + 1, TokenKind.OpenBrace);
+        parseNamespaceBody(depth + 1);
+        this.match(depth + 1, TokenKind.CloseBrace);
+
+    }
+
+    protected void parseExtensionNamespaceDefinition(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.EXTENSION_NAMESPACE_DEFINITION);
+        if (this.check(TokenKind.InlineKeyword)) {
+            this.match(depth + 1, TokenKind.InlineKeyword);
+        }
+
+        this.match(depth + 1, TokenKind.NamespaceKeyword);
+        parseOriginalNamespaceName(depth + 1);
+        this.match(depth + 1, TokenKind.OpenBrace);
+        parseNamespaceBody(depth + 1);
+        this.match(depth + 1, TokenKind.CloseBrace);
+
+    }
+
+    protected void parseNamespaceBody(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NAMESPACE_BODY);
+        if(!this.checkDeclarationSequence()) return;
+        tryParse(() -> parseDeclarationSequence(depth + 1));
+    }
+
+    protected void parseLinkageSpecification(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.LINKAGE_SPEIFICATION);
+        this.match(depth + 1, TokenKind.ExternKeyword);
+        this.match(depth + 1, TokenKind.StringLiteral);
+        this.match(depth + 1, TokenKind.OpenBrace);
+
+        if(this.checkDeclarationSequence()) {
+           parseDeclarationSequence(depth + 1);
+        }
+
+        this.match(depth + 1, TokenKind.CloseBrace);
+    }
+
+    protected void parseExplicitSpecialization(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.EXPLICIT_SPECIALIZATION);
+
+        this.match(depth + 1, TokenKind.TemplateKeyword);
+        this.match(depth + 1, TokenKind.LessThan);
+        this.match(depth + 1, TokenKind.GreaterThan);
+
+        parseDeclaration(depth + 1);
+    }
+
+    protected void parseExplicitInstantiation(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.EXPLICIT_INSTANTIATION);
+
+        if (this.check(TokenKind.ExternKeyword)) {
+            this.match(depth + 1, TokenKind.ExternKeyword);
+        }
+
+        this.match(depth + 1, TokenKind.TemplateKeyword);
+
+        parseDeclaration(depth + 1);
     }
 
     protected void parseEmptyDeclaration(int depth) throws ParserException {
@@ -389,7 +466,6 @@ public class SimpleParser implements Parser {
     protected void parseStatement(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.STATEMENT);
 
-
         if(this.checkLabeledStatement() && tryParse(() -> parseLabeledStatement(depth + 1))) return;
         if(this.checkDeclarationStatement() && tryParse(() -> parseDeclarationStatement(depth + 1))) return;
 
@@ -401,7 +477,8 @@ public class SimpleParser implements Parser {
         if(this.checkCompoundStatement() && tryParse(() -> parseCompoundStatement(depth + 1))) return;
         if(this.checkIterationStatement() && tryParse(() -> parseIterationStatement(depth + 1))) return;
         if(this.checkSelectionStatement() && tryParse(() -> parseSelectionStatement(depth + 1))) return;
-        if(this.checkJumpStatement() && tryParse(() -> parseJumpStatement(depth + 1))) return;
+
+        parseJumpStatement(depth + 1);
     }
 
     protected void parseDeclarationStatement(int depth) throws ParserException {
@@ -914,9 +991,7 @@ public class SimpleParser implements Parser {
         if (this.checkPtrOperator()) {
             parsePtrOperator(depth + 1);
 
-            tryParse(() -> {
-                parsePtrAbstractDeclarator(depth + 1);
-            });
+            tryParse(() -> parsePtrAbstractDeclarator(depth + 1));
 
             return;
         }
@@ -2194,9 +2269,7 @@ public class SimpleParser implements Parser {
 
     protected void parsePseudoDestructorNameOptionalNestedNameSpecifier(int depth) throws ParserException {
         if (this.checkNestedNameSpecifier()) {
-            boolean success = tryParse(() -> {
-                parseNestedNameSpecifier(depth + 1);
-            });
+            boolean success = tryParse(() -> parseNestedNameSpecifier(depth + 1));
 
             if (success && this.check(TokenKind.TemplateKeyword)) {
                 success = tryParse(() -> {
@@ -2397,22 +2470,15 @@ public class SimpleParser implements Parser {
         }
 
         if (this.checkExceptionSpecification()) {
-            tryParse(() -> {
-                parseExceptionSpecification(depth + 1);
-            });
+            tryParse(() -> parseExceptionSpecification(depth + 1));
         }
 
         if (this.checkAttributeSpecifierSequence()) {
-            tryParse(() -> {
-                parseAttributeSpecifierSequence(depth + 1);
-
-            });
+            tryParse(() -> parseAttributeSpecifierSequence(depth + 1));
         }
 
         if (this.checkTrailingReturnType()) {
-            tryParse(() -> {
-                parseTrailingReturnType(depth + 1);
-            });
+            tryParse(() -> parseTrailingReturnType(depth + 1));
         }
     }
 
@@ -2521,6 +2587,9 @@ public class SimpleParser implements Parser {
 
     protected void parseNoptrDeclarator(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.NOPTR_DECLARATOR);
+
+
+        //TODO: FIX THIS
 
         //If this case fails it could possibly be next case
         if(this.checkParametersAndQualifiers()) {
@@ -3242,7 +3311,7 @@ public class SimpleParser implements Parser {
                 this.checkNoPtrNewDeclarator();
     }
 
-    private boolean checkNoPtrNewDeclarator() {
+    protected boolean checkNoPtrNewDeclarator() {
         return this.check(TokenKind.OpenBracket);
     }
 
@@ -3332,7 +3401,7 @@ public class SimpleParser implements Parser {
         return this.checkInclusiveOrExpression();
     }
 
-    private boolean checkInclusiveOrExpression() {
+    protected boolean checkInclusiveOrExpression() {
         return this.checkExclusiveOrExpression();
     }
 
@@ -3754,7 +3823,7 @@ public class SimpleParser implements Parser {
                 this.checkCaptureList();
     }
 
-    private boolean checkCaptureList() {
+    protected boolean checkCaptureList() {
         return this.checkCapture();
     }
 
@@ -4028,7 +4097,7 @@ public class SimpleParser implements Parser {
         return this.check(TokenKind.AsmKeyword);
     }
 
-    private boolean checkNamespaceAliasDefinition() {
+    protected boolean checkNamespaceAliasDefinition() {
         return this.check(TokenKind.NamespaceKeyword);
     }
 
@@ -4068,4 +4137,49 @@ public class SimpleParser implements Parser {
         return this.checkBracedInitList() ||
                 this.check(TokenKind.Equals);
     }
+
+    protected boolean checkExplicitInstantiation() {
+        return this.check(new TokenKind[] {
+                TokenKind.ExternKeyword,
+                TokenKind.TemplateKeyword,
+        });
+    }
+
+    protected boolean checkExplicitSpecialization() {
+        return this.check(TokenKind.TemplateKeyword);
+    }
+
+    protected boolean checkLinkageSpecification() {
+        return this.check(TokenKind.ExternKeyword);
+    }
+
+    protected boolean checkNamespaceDefinition() {
+        return this.checkNamedNamespaceDefinition() ||
+                this.checkUnnamedNamespaceDefinition();
+    }
+
+    protected boolean checkUnnamedNamespaceDefinition() {
+        return this.check(TokenKind.InlineKeyword) ||
+                this.check(TokenKind.NamespaceKeyword);
+    }
+
+    protected boolean checkNamedNamespaceDefinition() {
+        return this.checkOriginalNamespaceDefinition() ||
+                this.checkExtensionNamespaceDefinition();
+    }
+
+    protected boolean checkOriginalNamespaceDefinition() {
+        return this.check(TokenKind.InlineKeyword) ||
+                this.check(TokenKind.NamespaceKeyword);
+    }
+
+    protected boolean checkExtensionNamespaceDefinition() {
+        return this.check(TokenKind.InlineKeyword) ||
+                this.check(TokenKind.NamespaceKeyword);
+    }
+
+    protected boolean checkAttributeDeclaration() {
+        return this.checkAttributeSpecifierSequence();
+    }
+
 }
