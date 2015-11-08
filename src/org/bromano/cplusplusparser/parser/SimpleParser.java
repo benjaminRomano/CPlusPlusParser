@@ -2,7 +2,6 @@ package org.bromano.cplusplusparser.parser;
 
 import org.bromano.cplusplusparser.scanner.Token;
 import org.bromano.cplusplusparser.scanner.TokenKind;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -238,7 +237,6 @@ public class SimpleParser implements Parser {
         parseDeclarationSequence(depth + 1);
     }
 
-
     protected void parseDeclaration(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.DECLARATION);
 
@@ -363,7 +361,6 @@ public class SimpleParser implements Parser {
         this.match(depth + 1, TokenKind.Semicolon);
     }
 
-
     protected void parseFunctionDefinition(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.FUNCTION_DEFINITION);
 
@@ -376,6 +373,17 @@ public class SimpleParser implements Parser {
         }
 
         parseDeclarator(depth + 1);
+
+        if (this.check(TokenKind.Equals)) {
+            this.match(depth + 1, TokenKind.Equals);
+
+            this.match(depth + 1,new TokenKind[] {
+                    TokenKind.DeleteKeyword,
+                    TokenKind.DefaultKeyword
+            });
+
+            return;
+        }
         parseFunctionBody(depth + 1);
     }
 
@@ -585,20 +593,22 @@ public class SimpleParser implements Parser {
         this.addTreeNode(depth, NodeType.USING_DIRECTIVE);
 
         if(this.checkAttributeSpecifierSequence()) {
-            parseAttributeSpecifierSequence(depth + 1);
+            tryParse(() -> parseAttributeSpecifierSequence(depth + 1));
         }
 
         this.match(depth + 1, TokenKind.UsingKeyword);
         this.match(depth + 1, TokenKind.NamespaceKeyword);
 
         if(this.check(TokenKind.ColonColon)) {
-           boolean success = tryParse(() -> parseNestedNameSpecifier(depth + 1));
+            boolean success = tryParse(() -> parseNestedNameSpecifier(depth + 1));
 
-            if(!success) {
+            if (!success) {
                 this.match(depth + 1, TokenKind.ColonColon);
             }
-        } else if(this.checkNestedNameSpecifier()) {
-            parseNestedNameSpecifier(depth + 1);
+        }
+
+        if(this.checkNestedNameSpecifier()) {
+            tryParse(() -> parseNestedNameSpecifier(depth + 1));
         }
 
         parseNamespaceName(depth + 1);
@@ -1152,8 +1162,8 @@ public class SimpleParser implements Parser {
     protected void parseTypeSpecifier(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.TYPE_SPECIFIER);
 
-        if (tryParse(() -> parseTrailingTypeSpecifier(depth + 1))) return;
-        if (tryParse(() -> parseClassSpecifier(depth + 1))) return;
+        if (this.checkTrailingTypeSpecifier() && tryParse(() -> parseTrailingTypeSpecifier(depth + 1))) return;
+        if (this.checkClassSpecifier() && tryParse(() -> parseClassSpecifier(depth + 1))) return;
 
         parseEnumSpecifier(depth + 1);
     }
@@ -1645,14 +1655,16 @@ public class SimpleParser implements Parser {
     protected void parseTrailingTypeSpecifier(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.TRAILING_TYPE_SPECIFIER);
 
-        if (tryParse(() -> parseSimpleTypeSpecifier(depth + 1))) return;
-        if (tryParse(() -> parseElaboratedTypeSpecifier(depth + 1))) return;
-        if (tryParse(() -> parseTypenameSpecifier(depth + 1))) return;
+        if (this.checkSimpleTypeSpecifier() && tryParse(() -> parseSimpleTypeSpecifier(depth + 1))) return;
+        if (this.checkElaboratedTypeSpecifier() && tryParse(() -> parseElaboratedTypeSpecifier(depth + 1))) return;
+        if (this.checkTypenameSpecifier() && tryParse(() -> parseTypenameSpecifier(depth + 1))) return;
 
         parseCvQualifier(depth + 1);
     }
 
     protected void parseSimpleTypeSpecifier(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.SIMPLE_TYPE_SPECIFIER);
+
         if (this.check(new TokenKind[]{
                 TokenKind.CharKeyword,
                 TokenKind.Char16TKeyword,
@@ -1712,15 +1724,15 @@ public class SimpleParser implements Parser {
     protected void parseTypeName(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.TYPE_NAME);
 
-        if (tryParse(() -> parseClassName(depth + 1))) return;
-        if (tryParse(() -> parseEnumName(depth + 1))) return;
-        if (tryParse(() -> parseTypedefName(depth + 1))) return;
+        if (this.checkClassName() && tryParse(() -> parseClassName(depth + 1))) return;
+        if (this.checkEnumName() && tryParse(() -> parseEnumName(depth + 1))) return;
+        if (this.checkSimpleTemplateId() && tryParse(() -> parseSimpleTemplateId(depth + 1))) return;
 
-        parseSimpleTemplateId(depth + 1);
+        parseTypedefName(depth + 1);
     }
 
     protected void parseClassName(int depth) throws ParserException {
-        this.addTreeNode(depth, NodeType.TYPE_NAME);
+        this.addTreeNode(depth, NodeType.CLASS_NAME);
 
         if (this.checkSimpleTemplateId()) {
             tryParse(() -> parseSimpleTemplateId(depth + 1));
@@ -1738,7 +1750,10 @@ public class SimpleParser implements Parser {
     protected void parseTypedefName(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.TYPEDEF_NAME);
 
-        this.match(depth + 1, TokenKind.Identifier);
+        //TODO: FORCING THIS TO THROW ERRORS
+        throw new ParserException("FORCED ERROR");
+
+        //this.match(depth + 1, TokenKind.Identifier);
     }
 
     protected void parseElaboratedTypeSpecifier(int depth) throws ParserException {
@@ -2706,42 +2721,49 @@ public class SimpleParser implements Parser {
     protected void parseDeclSpecifierSequence(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.DECL_SPECIFIER_SEQUENCE);
 
-        parseDeclSpecifier(depth + 1);
+        boolean isTypeSpecifier = parseDeclSpecifier(depth + 1);
 
         if (this.checkAttributeSpecifierSequence()) {
-            boolean success = tryParse(() -> parseAttributeSpecifierSequence(depth + 1));
-            if (success) return;
+            tryParse(() -> parseAttributeSpecifierSequence(depth + 1));
         }
 
+        //NOTE: Fixes problem in the grammar
+        if(isTypeSpecifier) return;
+
         if (this.checkDeclSpecifierSequence()) {
-            parseDeclSpecifierSequence(depth + 1);
+            tryParse(() -> parseDeclSpecifierSequence(depth + 1));
         }
     }
 
-    protected void parseDeclSpecifier(int depth) throws ParserException {
+    protected boolean parseDeclSpecifier(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.DECL_SPECIFIER);
 
-        if (this.checkStorageClassSpecifier()) {
-            parseStorageClassSpecifier(depth + 1);
-            return;
-        }
-
-        if (this.checkTypeSpecifier()) {
-            parseTypeSpecifier(depth + 1);
-            return;
-        }
-
-        if (this.checkFunctionSpecifier()) {
-            parseFunctionSpecifier(depth + 1);
-            return;
-        }
-
-        this.match(depth + 1, new TokenKind[]{
+        if(this.check(new TokenKind[] {
                 TokenKind.FriendKeyword,
                 TokenKind.TypedefKeyword,
                 TokenKind.ConstexprKeyword
-        });
+        })) {
+            this.match(depth + 1, new TokenKind[]{
+                    TokenKind.FriendKeyword,
+                    TokenKind.TypedefKeyword,
+                    TokenKind.ConstexprKeyword
+            });
 
+            return false;
+        }
+
+        if (this.checkStorageClassSpecifier()) {
+            parseStorageClassSpecifier(depth + 1);
+            return false;
+        }
+
+        //TODO: Not parsing identifier<identifier>
+        if (this.checkTypeSpecifier()) {
+            if(tryParse(() -> parseTypeSpecifier(depth + 1))) return true;
+        }
+
+        parseFunctionSpecifier(depth + 1);
+        return false;
     }
 
     protected void parseStorageClassSpecifier(int depth) throws ParserException {
@@ -2827,7 +2849,7 @@ public class SimpleParser implements Parser {
     }
 
     protected void parseTrailingTypeSpecifierSequence(int depth) throws ParserException {
-        this.addTreeNode(depth, NodeType.LAMBDA_INTRODUCER);
+        this.addTreeNode(depth, NodeType.TRAILING_TYPE_SPECIFIER_SEQUENCE);
 
         parseTypeSpecifier(depth + 1);
 
@@ -3358,22 +3380,25 @@ public class SimpleParser implements Parser {
     }
 
     protected boolean checkSimpleTypeSpecifier() {
-        return this.check(new TokenKind[]{
-                TokenKind.ColonColon,
-                TokenKind.CharKeyword,
-                TokenKind.Char16TKeyword,
-                TokenKind.Char32TKeyword,
-                TokenKind.WcharTKeyword,
-                TokenKind.ShortKeyword,
-                TokenKind.IntKeyword,
-                TokenKind.LongKeyword,
-                TokenKind.SignedKeyword,
-                TokenKind.UnsignedKeyword,
-                TokenKind.FloatKeyword,
-                TokenKind.DoubleKeyword,
-                TokenKind.VoidKeyword,
-                TokenKind.AutoKeyword
-        }) || this.checkDeclTypeSpecifier();
+        return this.checkNestedNameSpecifier() ||
+                this.checkTypeName() ||
+                this.checkDeclTypeSpecifier() ||
+                this.check(new TokenKind[]{
+                        TokenKind.ColonColon,
+                        TokenKind.CharKeyword,
+                        TokenKind.Char16TKeyword,
+                        TokenKind.Char32TKeyword,
+                        TokenKind.WcharTKeyword,
+                        TokenKind.ShortKeyword,
+                        TokenKind.IntKeyword,
+                        TokenKind.LongKeyword,
+                        TokenKind.SignedKeyword,
+                        TokenKind.UnsignedKeyword,
+                        TokenKind.FloatKeyword,
+                        TokenKind.DoubleKeyword,
+                        TokenKind.VoidKeyword,
+                        TokenKind.AutoKeyword
+                });
     }
 
     protected boolean checkDeclTypeSpecifier() {
@@ -3622,7 +3647,14 @@ public class SimpleParser implements Parser {
 
     protected boolean checkDeclaration() {
         return this.checkEmptyDeclaration() ||
-                this.checkFunctionDefinition();
+                this.checkFunctionDefinition() ||
+                this.checkBlockDeclaration() ||
+                this.checkTemplateDeclaration() ||
+                this.checkExplicitInstantiation() ||
+                this.checkExplicitSpecialization() ||
+                this.checkLinkageSpecification() ||
+                this.checkNamespaceDefinition() ||
+                this.checkAttributeDeclaration();
     }
 
     protected boolean checkEmptyDeclaration() {
