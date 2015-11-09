@@ -480,6 +480,8 @@ public class SimpleParser implements Parser {
     protected void parseStatement(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.STATEMENT);
 
+        printTree();
+
         if(this.checkLabeledStatement() && tryParse(() -> parseLabeledStatement(depth + 1))) return;
         if(this.checkDeclarationStatement() && tryParse(() -> parseDeclarationStatement(depth + 1))) return;
 
@@ -1665,19 +1667,44 @@ public class SimpleParser implements Parser {
     protected void parseSimpleTypeSpecifier(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.SIMPLE_TYPE_SPECIFIER);
 
-        if (this.check(new TokenKind[]{
-                TokenKind.CharKeyword,
-                TokenKind.Char16TKeyword,
-                TokenKind.Char32TKeyword,
-                TokenKind.WcharTKeyword,
-                TokenKind.BoolKeyword,
+        if(this.check(new TokenKind[] {
                 TokenKind.ShortKeyword,
                 TokenKind.IntKeyword,
                 TokenKind.LongKeyword,
                 TokenKind.SignedKeyword,
                 TokenKind.UnsignedKeyword,
                 TokenKind.FloatKeyword,
-                TokenKind.DoubleKeyword,
+                TokenKind.DoubleKeyword
+        })) {
+            while(this.check(new TokenKind[] {
+                    TokenKind.ShortKeyword,
+                    TokenKind.IntKeyword,
+                    TokenKind.LongKeyword,
+                    TokenKind.SignedKeyword,
+                    TokenKind.UnsignedKeyword,
+                    TokenKind.FloatKeyword,
+                    TokenKind.DoubleKeyword
+            })) {
+                match(depth + 1, new TokenKind[]{
+                        TokenKind.ShortKeyword,
+                        TokenKind.IntKeyword,
+                        TokenKind.LongKeyword,
+                        TokenKind.SignedKeyword,
+                        TokenKind.UnsignedKeyword,
+                        TokenKind.FloatKeyword,
+                        TokenKind.DoubleKeyword
+                });
+            }
+
+            return;
+        }
+
+        if (this.check(new TokenKind[]{
+                TokenKind.CharKeyword,
+                TokenKind.Char16TKeyword,
+                TokenKind.Char32TKeyword,
+                TokenKind.WcharTKeyword,
+                TokenKind.BoolKeyword,
                 TokenKind.VoidKeyword,
                 TokenKind.AutoKeyword
         })) {
@@ -1698,15 +1725,13 @@ public class SimpleParser implements Parser {
                     TokenKind.AutoKeyword
             });
 
-            return;
         } else if (this.checkDeclTypeSpecifier()) {
             parseDecltypeSpecifier(depth + 1);
-            return;
         } else if (this.check(TokenKind.ColonColon)) {
             this.match(depth + 1, TokenKind.ColonColon);
         }
 
-        tryParse(() -> {
+        if(tryParse(() -> {
             parseNestedNameSpecifier(depth + 1);
 
             if (this.check(TokenKind.TemplateKeyword)) {
@@ -1716,7 +1741,7 @@ public class SimpleParser implements Parser {
             }
 
             parseTypeName(depth + 1);
-        });
+        })) return;
 
         parseTypeName(depth + 1);
     }
@@ -1874,18 +1899,19 @@ public class SimpleParser implements Parser {
             this.match(depth + 1, TokenKind.DotDotDot);
         }
 
-        if (this.check(TokenKind.Comma)) {
-            parseTemplateArgumentList(depth + 1);
-        }
+        if (!this.check(TokenKind.Comma)) return;
 
-        tryParse(() -> parseTemplateArgumentList(depth + 1));
+        parseTemplateArgumentList(depth + 1);
+
     }
 
     protected void parseTemplateArgument(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.TEMPLATE_ARGUMENT);
 
         if (this.checkConstantExpression()) {
-            parseConstantExpression(depth + 1);
+            if(tryParse(() -> parseConstantExpression(depth + 1))) return;
+        } else if (this.checkIdExpression()) {
+            if(tryParse(() -> parseIdExpression(depth + 1))) return;
         }
 
         parseTypeId(depth + 1);
@@ -2449,7 +2475,11 @@ public class SimpleParser implements Parser {
                     TokenKind.FloatingLiteral,
                     TokenKind.StringLiteral,
                     TokenKind.BooleanLiteral,
-                    TokenKind.PointerLiteral
+                    TokenKind.PointerLiteral,
+                    TokenKind.UserDefinedStringLiteral,
+                    TokenKind.UserDefinedCharacterLiteral,
+                    TokenKind.UserDefinedFloatingLiteral,
+                    TokenKind.UserDefinedIntegerLiteral
             });
             return;
         }
