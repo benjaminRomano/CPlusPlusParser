@@ -240,6 +240,11 @@ public class SimpleParser implements Parser {
     protected void parseDeclaration(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.DECLARATION);
 
+        if(this.check(TokenKind.Semicolon)) {
+            parseEmptyDeclaration(depth + 1);
+            return;
+        }
+
         if(this.checkFunctionDefinition() && tryParse(() -> parseFunctionDefinition(depth + 1))) return;
         if(this.checkTemplateDeclaration() && tryParse(() -> parseTemplateDeclaration(depth + 1))) return;
         if(this.checkExplicitInstantiation() && tryParse(() -> parseExplicitInstantiation(depth + 1))) return;
@@ -247,9 +252,8 @@ public class SimpleParser implements Parser {
         if(this.checkLinkageSpecification() && tryParse(() -> parseLinkageSpecification(depth + 1))) return;
         if(this.checkNamespaceDefinition() && tryParse(() -> parseNamespaceDefinition(depth + 1))) return;
         if(this.checkAttributeDeclaration() && tryParse(() -> parseAttributeDeclaration(depth + 1))) return;
-        if(this.checkBlockDeclaration() && tryParse(() -> parseBlockDeclaration(depth + 1))) return;
 
-        parseEmptyDeclaration(depth + 1);
+        parseBlockDeclaration(depth + 1);
     }
 
     protected void parseAttributeDeclaration(int depth) throws ParserException {
@@ -506,14 +510,14 @@ public class SimpleParser implements Parser {
     protected void parseBlockDeclaration(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.BLOCK_DECLARATION);
 
-        if(this.checkSimpleDeclaration() && tryParse(() -> parseSimpleDeclaration(depth + 1))) return;
+        if(this.checkOpaqueEnumDeclaration() && tryParse(() -> parseOpaqueEnumDeclaration(depth + 1))) return;
         if(this.checkAsmDefinition() && tryParse(() -> parseAsmDefinition(depth + 1))) return;
         if(this.checkUsingDeclaration() && tryParse(() -> parseUsingDeclaration(depth + 1))) return;
         if(this.checkUsingDirective() && tryParse(() -> parseUsingDirective(depth + 1))) return;
         if(this.checkStaticAssertDeclaration() && tryParse(() -> parseStaticAssertDeclaration(depth + 1))) return;
         if(this.checkAliasDeclaration() && tryParse(() -> parseAliasDeclaration(depth + 1))) return;
 
-        parseOpaqueEnumDeclaration(depth + 1);
+        parseSimpleDeclaration(depth + 1);
     }
 
     protected void parseSimpleDeclaration(int depth) throws ParserException {
@@ -1667,39 +1671,14 @@ public class SimpleParser implements Parser {
     protected void parseSimpleTypeSpecifier(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.SIMPLE_TYPE_SPECIFIER);
 
-        if(this.check(new TokenKind[] {
+        if (this.check(new TokenKind[]{
                 TokenKind.ShortKeyword,
                 TokenKind.IntKeyword,
                 TokenKind.LongKeyword,
                 TokenKind.SignedKeyword,
                 TokenKind.UnsignedKeyword,
                 TokenKind.FloatKeyword,
-                TokenKind.DoubleKeyword
-        })) {
-            while(this.check(new TokenKind[] {
-                    TokenKind.ShortKeyword,
-                    TokenKind.IntKeyword,
-                    TokenKind.LongKeyword,
-                    TokenKind.SignedKeyword,
-                    TokenKind.UnsignedKeyword,
-                    TokenKind.FloatKeyword,
-                    TokenKind.DoubleKeyword
-            })) {
-                match(depth + 1, new TokenKind[]{
-                        TokenKind.ShortKeyword,
-                        TokenKind.IntKeyword,
-                        TokenKind.LongKeyword,
-                        TokenKind.SignedKeyword,
-                        TokenKind.UnsignedKeyword,
-                        TokenKind.FloatKeyword,
-                        TokenKind.DoubleKeyword
-                });
-            }
-
-            return;
-        }
-
-        if (this.check(new TokenKind[]{
+                TokenKind.DoubleKeyword,
                 TokenKind.CharKeyword,
                 TokenKind.Char16TKeyword,
                 TokenKind.Char32TKeyword,
@@ -1725,6 +1704,7 @@ public class SimpleParser implements Parser {
                     TokenKind.AutoKeyword
             });
 
+            return;
         } else if (this.checkDeclTypeSpecifier()) {
             parseDecltypeSpecifier(depth + 1);
         } else if (this.check(TokenKind.ColonColon)) {
