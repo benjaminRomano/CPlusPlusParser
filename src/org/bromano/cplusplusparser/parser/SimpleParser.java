@@ -1671,15 +1671,62 @@ public class SimpleParser implements Parser {
     protected void parseSimpleTypeSpecifier(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.SIMPLE_TYPE_SPECIFIER);
 
-        if (this.check(new TokenKind[]{
-                TokenKind.ShortKeyword,
-                TokenKind.IntKeyword,
-                TokenKind.LongKeyword,
+        if (this.check(TokenKind.LongKeyword)) {
+            this.match(depth + 1, TokenKind.LongKeyword);
+            if (this.check(new TokenKind[]{
+                    TokenKind.IntKeyword,
+                    TokenKind.DoubleKeyword})) {
+                this.match(depth + 1, new TokenKind[]{
+                        TokenKind.IntKeyword,
+                        TokenKind.DoubleKeyword
+                });
+                return;
+            }
+            return;
+        } else if (this.check(TokenKind.IntKeyword)) {
+            this.match(depth + 1, TokenKind.IntKeyword);
+            if (this.check(new TokenKind[]{
+                    TokenKind.LongKeyword,
+                    TokenKind.ShortKeyword})) {
+                this.match(depth + 1, new TokenKind[]{
+                        TokenKind.LongKeyword,
+                        TokenKind.ShortKeyword
+                });
+                return;
+            }
+            return;
+        } else if (this.check(TokenKind.ShortKeyword)) {
+            this.match(depth + 1, TokenKind.ShortKeyword);
+            if (this.check(TokenKind.IntKeyword)) {
+                this.match(depth + 1, TokenKind.IntKeyword);
+            }
+            return;
+        } else if (this.check(new TokenKind[]{
                 TokenKind.SignedKeyword,
-                TokenKind.UnsignedKeyword,
+                TokenKind.UnsignedKeyword
+        })) {
+            this.match(depth + 1, new TokenKind[]{
+                    TokenKind.SignedKeyword,
+                    TokenKind.UnsignedKeyword,
+            });
+            if (this.check(new TokenKind[]{
+                    TokenKind.CharKeyword,
+                    TokenKind.ShortKeyword,
+                    TokenKind.IntKeyword,
+                    TokenKind.LongKeyword
+            })) {
+                this.match(depth + 1, new TokenKind[]{
+                        TokenKind.CharKeyword,
+                        TokenKind.ShortKeyword,
+                        TokenKind.IntKeyword,
+                        TokenKind.LongKeyword
+                });
+            }
+            return;
+        } else if (this.check(new TokenKind[]{
                 TokenKind.FloatKeyword,
-                TokenKind.DoubleKeyword,
                 TokenKind.CharKeyword,
+                TokenKind.DoubleKeyword,
                 TokenKind.Char16TKeyword,
                 TokenKind.Char32TKeyword,
                 TokenKind.WcharTKeyword,
@@ -1688,17 +1735,12 @@ public class SimpleParser implements Parser {
                 TokenKind.AutoKeyword
         })) {
             this.match(depth + 1, new TokenKind[]{
-                    TokenKind.CharKeyword,
                     TokenKind.Char16TKeyword,
                     TokenKind.Char32TKeyword,
                     TokenKind.WcharTKeyword,
                     TokenKind.BoolKeyword,
-                    TokenKind.ShortKeyword,
-                    TokenKind.IntKeyword,
-                    TokenKind.LongKeyword,
-                    TokenKind.SignedKeyword,
-                    TokenKind.UnsignedKeyword,
                     TokenKind.FloatKeyword,
+                    TokenKind.CharKeyword,
                     TokenKind.DoubleKeyword,
                     TokenKind.VoidKeyword,
                     TokenKind.AutoKeyword
@@ -1711,7 +1753,7 @@ public class SimpleParser implements Parser {
             this.match(depth + 1, TokenKind.ColonColon);
         }
 
-        if(tryParse(() -> {
+        if (tryParse(() -> {
             parseNestedNameSpecifier(depth + 1);
 
             if (this.check(TokenKind.TemplateKeyword)) {
@@ -2337,7 +2379,7 @@ public class SimpleParser implements Parser {
 
         if (this.check(TokenKind.Tilde)) {
             this.match(depth + 1, TokenKind.Tilde);
-            parseDeclSpecifier(depth + 1);
+            parseDecltypeSpecifier(depth + 1);
             return;
         }
 
@@ -2596,6 +2638,7 @@ public class SimpleParser implements Parser {
     protected void parseDeclarator(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.DECLARATOR);
 
+
         if(this.checkNoptrDeclarator()) {
             if(tryParse(() -> {
                 parseNoptrDeclarator(depth + 1);
@@ -2615,11 +2658,13 @@ public class SimpleParser implements Parser {
         this.addTreeNode(depth, NodeType.PTR_DECLARATOR);
 
         if(this.checkPtrOperator()) {
-            if(tryParse(() -> {
+            boolean success = tryParse(() -> {
                 parsePtrOperator(depth + 1);
-                parseParametersAndQualifiers(depth + 1);
-                parseTrailingReturnType(depth + 1);
-            })) return;
+            });
+            if(success) {
+                parsePtrDeclarator(depth + 1);
+                return;
+            }
         }
 
         parseNoptrDeclarator(depth + 1);
@@ -2731,49 +2776,34 @@ public class SimpleParser implements Parser {
     protected void parseDeclSpecifierSequence(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.DECL_SPECIFIER_SEQUENCE);
 
-        boolean isTypeSpecifier = parseDeclSpecifier(depth + 1);
-
-        if (this.checkAttributeSpecifierSequence()) {
-            tryParse(() -> parseAttributeSpecifierSequence(depth + 1));
-        }
-
-        //NOTE: Fixes problem in the grammar
-        if(isTypeSpecifier) return;
-
-        if (this.checkDeclSpecifierSequence()) {
-            tryParse(() -> parseDeclSpecifierSequence(depth + 1));
-        }
-    }
-
-    protected boolean parseDeclSpecifier(int depth) throws ParserException {
-        this.addTreeNode(depth, NodeType.DECL_SPECIFIER);
-
-        if(this.check(new TokenKind[] {
-                TokenKind.FriendKeyword,
-                TokenKind.TypedefKeyword,
-                TokenKind.ConstexprKeyword
-        })) {
-            this.match(depth + 1, new TokenKind[]{
-                    TokenKind.FriendKeyword,
-                    TokenKind.TypedefKeyword,
-                    TokenKind.ConstexprKeyword
-            });
-
-            return false;
-        }
-
-        if (this.checkStorageClassSpecifier()) {
+        if(this.checkStorageClassSpecifier()) {
             parseStorageClassSpecifier(depth + 1);
-            return false;
+            if(this.checkFunctionSpecifier()) {
+                parseFunctionSpecifier(depth + 1);
+            }
+            this.parseTypeSpecifier(depth + 1);
+            return;
+        } else if (this.check(TokenKind.FriendKeyword)) {
+           this.match(depth + 1, TokenKind.FriendKeyword);
+            if(this.checkFunctionSpecifier()) {
+                parseFunctionSpecifier(depth + 1);
+            }
+            this.parseTypeSpecifier(depth + 1);
+            return;
+        } else if (this.checkFunctionSpecifier()) {
+            parseFunctionSpecifier(depth + 1);
+            this.parseTypeSpecifier(depth + 1);
+            return;
+        } else if (this.checkTypeSpecifier()) {
+            parseTypeSpecifier(depth + 1);
+            return;
         }
 
-        //TODO: Not parsing identifier<identifier>
-        if (this.checkTypeSpecifier()) {
-            if(tryParse(() -> parseTypeSpecifier(depth + 1))) return true;
+        if (this.check(TokenKind.TypedefKeyword)) {
+            parseTypeSpecifier(depth + 1);
+            this.match(depth + 1, TokenKind.Identifier);
         }
-
-        parseFunctionSpecifier(depth + 1);
-        return false;
+        return;
     }
 
     protected void parseStorageClassSpecifier(int depth) throws ParserException {
