@@ -34,7 +34,12 @@ public class Main {
             Stack<String> parseTree = parser.parse();
             printStack(parseTree);
         } catch (ParserException exception) {
-            exception.printStackTrace();
+
+            if(parser.getTree() != null) {
+                printStack(parser.getTree());
+            }
+
+            exception.printStackTrace(System.out);
         }
     }
 

@@ -9,10 +9,11 @@ import java.util.Stack;
 import java.util.stream.Collectors;
 
 import static org.bromano.cplusplusparser.parser.NodeType.ENUMERATOR_DEFINITION;
+import static org.bromano.cplusplusparser.parser.NodeType.PARAMETER_DECLARATION;
 
 public class SimpleParser implements Parser {
     protected List<Token> tokens;
-    protected Stack<String> tree;
+     Stack<String> tree;
 
     protected Stack<Integer> savedTreePos;
 
@@ -26,6 +27,10 @@ public class SimpleParser implements Parser {
 
     public SimpleParser() {
         this.setTokens(new ArrayList<>());
+    }
+
+    public Stack<String> getTree() {
+        return this.reverseStack(this.tree);
     }
 
     public void setTokens(List<Token> tokens) {
@@ -194,9 +199,17 @@ public class SimpleParser implements Parser {
 
     public <T> Stack<T> reverseStack(Stack<T> stack) {
         Stack<T> reversedStack = new Stack<>();
+        Stack<T> tempStack = new Stack<>();
+
         while(!stack.isEmpty()) {
+            tempStack.push(stack.peek());
             reversedStack.push(stack.pop());
         }
+
+        while(!tempStack.isEmpty()) {
+            stack.push(tempStack.pop());
+        }
+
         return reversedStack;
     }
 
@@ -243,10 +256,12 @@ public class SimpleParser implements Parser {
         if(this.check(TokenKind.Semicolon)) {
             parseEmptyDeclaration(depth + 1);
             return;
+        } else if (this.check(TokenKind.NamespaceKeyword)) {
+            parseNamespaceDefinition(depth + 1);
+            return;
         }
 
         if(this.checkFunctionDefinition() && tryParse(() -> parseFunctionDefinition(depth + 1))) return;
-        if(this.checkTemplateDeclaration() && tryParse(() -> parseTemplateDeclaration(depth + 1))) return;
         if(this.checkExplicitInstantiation() && tryParse(() -> parseExplicitInstantiation(depth + 1))) return;
         if(this.checkExplicitSpecialization() && tryParse(() -> parseExplicitSpecialization(depth + 1))) return;
         if(this.checkLinkageSpecification() && tryParse(() -> parseLinkageSpecification(depth + 1))) return;
@@ -278,6 +293,7 @@ public class SimpleParser implements Parser {
         }
 
         this.match(depth + 1, TokenKind.NamespaceKeyword);
+        this.match(depth + 1, TokenKind.Identifier);
         this.match(depth + 1, TokenKind.OpenBrace);
         parseNamespaceBody(depth + 1);
         this.match(depth + 1, TokenKind.CloseBrace);
@@ -314,15 +330,18 @@ public class SimpleParser implements Parser {
         this.match(depth + 1, TokenKind.NamespaceKeyword);
         parseOriginalNamespaceName(depth + 1);
         this.match(depth + 1, TokenKind.OpenBrace);
-        parseNamespaceBody(depth + 1);
+
+        if(!this.check(TokenKind.CloseBrace)) {
+            parseNamespaceBody(depth + 1);
+        }
+
         this.match(depth + 1, TokenKind.CloseBrace);
 
     }
 
     protected void parseNamespaceBody(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.NAMESPACE_BODY);
-        if(!this.checkDeclarationSequence()) return;
-        tryParse(() -> parseDeclarationSequence(depth + 1));
+        parseDeclarationSequence(depth + 1);
     }
 
     protected void parseLinkageSpecification(int depth) throws ParserException {
@@ -372,9 +391,24 @@ public class SimpleParser implements Parser {
             parseAttributeSpecifierSequence(depth + 1);
         }
 
-        if(this.checkDeclSpecifierSequence()) {
-            tryParse(() -> parseDeclSpecifierSequence(depth + 1));
-        }
+        if(this.checkDeclSpecifierSequence() && tryParse(() -> {
+                parseDeclSpecifierSequence(depth + 1);
+
+                parseDeclarator(depth + 1);
+
+                if (this.check(TokenKind.Equals)) {
+                    this.match(depth + 1, TokenKind.Equals);
+
+                    this.match(depth + 1,new TokenKind[] {
+                            TokenKind.DeleteKeyword,
+                            TokenKind.DefaultKeyword
+                    });
+                    return;
+                }
+
+                parseFunctionBody(depth + 1);
+
+            })) return;
 
         parseDeclarator(depth + 1);
 
@@ -388,6 +422,7 @@ public class SimpleParser implements Parser {
 
             return;
         }
+
         parseFunctionBody(depth + 1);
     }
 
@@ -484,19 +519,38 @@ public class SimpleParser implements Parser {
     protected void parseStatement(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.STATEMENT);
 
-        printTree();
-
-        if(this.checkLabeledStatement() && tryParse(() -> parseLabeledStatement(depth + 1))) return;
-        if(this.checkDeclarationStatement() && tryParse(() -> parseDeclarationStatement(depth + 1))) return;
-
-        if(this.checkAttributeSpecifierSequence()) {
+        if (this.check(TokenKind.Identifier)) {
+            if(this.checkLabeledStatement() && tryParse(() -> parseLabeledStatement(depth + 1))) return;
+            else if(this.checkDeclarationStatement() && tryParse(() -> parseDeclarationStatement(depth + 1))) return;
+            else {
+                parseExpressionStatement(depth + 1);
+                return;
+            }
+        } else if (this.checkLabeledStatement()) {
+            parseLabeledStatement(depth + 1);
+            return;
+        } else if (this.checkDeclarationStatement()) {
+            parseDeclarationStatement(depth + 1);
+            return;
+        } else if (this.checkExpressionStatement()) {
+            parseDeclarationStatement(depth + 1);
+            return;
+        } else if (this.checkDeclarationStatement()) {
+            parseDeclarationStatement(depth + 1);
+            return;
+        } else if (this.checkAttributeSpecifierSequence()) {
             parseAttributeSpecifierSequence(depth + 1);
+            return;
+        } else if (this.checkCompoundStatement()) {
+            parseCompoundStatement(depth + 1);
+            return;
+        } else if (this.checkIterationStatement()) {
+            parseIterationStatement(depth + 1);
+            return;
+        } else if (this.checkSelectionStatement()) {
+            parseSelectionStatement(depth + 1);
+            return;
         }
-
-        if(this.checkExpressionStatement() && tryParse(() -> parseExpressionStatement(depth + 1))) return;
-        if(this.checkCompoundStatement() && tryParse(() -> parseCompoundStatement(depth + 1))) return;
-        if(this.checkIterationStatement() && tryParse(() -> parseIterationStatement(depth + 1))) return;
-        if(this.checkSelectionStatement() && tryParse(() -> parseSelectionStatement(depth + 1))) return;
 
         parseJumpStatement(depth + 1);
     }
@@ -1180,14 +1234,12 @@ public class SimpleParser implements Parser {
         parseClassHead(depth + 1);
         this.match(depth + 1, TokenKind.OpenBrace);
 
-        boolean success = tryParse(() -> {
-
-            parseMemberSpecification(depth + 1);
+        if (this.check(TokenKind.CloseBrace)) {
             this.match(depth + 1, TokenKind.CloseBrace);
-        });
+            return;
+        }
 
-        if (success) return;
-
+        parseMemberSpecification(depth + 1);
         this.match(depth + 1, TokenKind.CloseBrace);
     }
 
@@ -1196,7 +1248,9 @@ public class SimpleParser implements Parser {
         boolean success;
 
         if (this.checkClassHeadName()) {
-            parseNestedNameSpecifier(depth + 1);
+            tryParse(() -> {
+                parseNestedNameSpecifier(depth + 1);
+            });
             this.match(depth + 1, TokenKind.Identifier);
             tryParse(() -> parseBaseClause(depth + 1));
             return;
@@ -1334,17 +1388,20 @@ public class SimpleParser implements Parser {
     protected void parseMemberDeclaration(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.MEMBER_DECLARATION);
 
-        if(this.checkAttributeSpecifierSequence()) {
-            parseAttributeSpecifierSequence(depth + 1);
-            if(this.checkDeclSpecifierSequence()) {
-                if(this.checkMemberDeclaratorList()) {
-                    parseDeclSpecifierSequence(depth + 1);
-                }
+        if(this.checkDeclSpecifierSequence() && tryParse(() -> {
+            parseDeclSpecifierSequence(depth + 1);
+            if (this.checkMemberDeclaratorList() && tryParse(() -> {
                 parseMemberDeclaratorList(depth + 1);
-            } else if(this.checkMemberDeclaratorList()) {
-                parseMemberDeclaratorList(depth + 1);
-            }
+                this.match(depth + 1, TokenKind.Semicolon);
+            })) return;
+
             this.match(depth + 1, TokenKind.Semicolon);
+        })) return;
+
+        if (this.checkMemberDeclaratorList()) {
+                parseMemberDeclaratorList(depth + 1);
+            this.match(depth + 1, TokenKind.Semicolon);
+            return;
         }
 
         if(tryParse(() -> {
@@ -2616,7 +2673,7 @@ public class SimpleParser implements Parser {
 
         if (success) return;
 
-        success = tryParse(() -> {
+        tryParse(() -> {
             parseAbstractDeclarator(depth + 1);
 
             if (!this.check(TokenKind.Equals)) {
@@ -2628,11 +2685,6 @@ public class SimpleParser implements Parser {
                 parseInitializerClause(depth + 1);
             });
         });
-
-        if (success) return;
-
-        this.match(depth + 1, TokenKind.Equals);
-        parseInitializerClause(depth + 1);
     }
 
     protected void parseDeclarator(int depth) throws ParserException {
@@ -2648,7 +2700,9 @@ public class SimpleParser implements Parser {
                 if (this.checkTrailingReturnType()) {
                     parseTrailingReturnType(depth + 1);
                 }
-            })) return;
+            })) {
+                return;
+            }
         }
 
         parsePtrDeclarator(depth + 1);
@@ -2793,6 +2847,12 @@ public class SimpleParser implements Parser {
         } else if (this.checkFunctionSpecifier()) {
             parseFunctionSpecifier(depth + 1);
             this.parseTypeSpecifier(depth + 1);
+            return;
+        } else if (this.check(TokenKind.ConstKeyword)) {
+            parseTypeSpecifier(depth + 1);
+            if(this.checkTypeSpecifier()) {
+                parseTypeSpecifier(depth + 1);
+            }
             return;
         } else if (this.checkTypeSpecifier()) {
             parseTypeSpecifier(depth + 1);
