@@ -2,10 +2,16 @@
 
 A Parser for C++ using Java. Created using the grammar found [here](http://www.nongnu.org/hcb/).
 
-Compile steps:
+#####How to compile:
 ```bash
-$ javac src/org/bromano/cplusplusparser/*.java src/org/bromano/cplusplusparser/scanner/*.java src/org/bromano/cplusplusparser/Main.java
+$ javac src/org/bromano/cplusplusparser/parser/*.java src/org/bromano/cplusplusparser/scanner/*.java src/org/bromano/cplusplusparser/Main.java
 $ jar cvfm cplusplusparser.jar src/META-INF/MANIFEST.mf -C src .
+```
+#####How to run:
+```bash
+$ java -jar cplusplusparser.jar "path\to\file" 
+OR
+$ java -jar cplusplusparser.jar < "path\to\file"
 ```
 Example output for a very simple c++ file:
 ```c++
