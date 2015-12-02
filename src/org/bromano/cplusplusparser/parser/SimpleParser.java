@@ -1248,9 +1248,7 @@ public class SimpleParser implements Parser {
         boolean success;
 
         if (this.checkClassHeadName()) {
-            tryParse(() -> {
-                parseNestedNameSpecifier(depth + 1);
-            });
+            tryParse(() -> parseNestedNameSpecifier(depth + 1));
             this.match(depth + 1, TokenKind.Identifier);
             tryParse(() -> parseBaseClause(depth + 1));
             return;
@@ -2863,7 +2861,6 @@ public class SimpleParser implements Parser {
             parseTypeSpecifier(depth + 1);
             this.match(depth + 1, TokenKind.Identifier);
         }
-        return;
     }
 
     protected void parseStorageClassSpecifier(int depth) throws ParserException {
