@@ -24,7 +24,25 @@ public class Main {
     public static void run(String text) {
         Scanner scanner = new SimpleScanner(text);
 
-        List<Token> tokens = scanner.lex();
+        List<Token> tokens = null;
+        boolean success = false;
+
+        try {
+            tokens = scanner.lex();
+            success = true;
+        } catch (ScannerException exception) {
+            if(scanner.getTokens() == null) {
+                return;
+            }
+
+            scanner.getTokens().forEach(System.out::println);
+
+            exception.printStackTrace(System.out);
+        }
+
+        if (!success) {
+            return;
+        }
 
         printTokens(tokens);
 

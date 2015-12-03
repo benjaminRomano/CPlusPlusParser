@@ -387,10 +387,6 @@ public class SimpleParser implements Parser {
     protected void parseFunctionDefinition(int depth) throws ParserException {
         this.addTreeNode(depth, NodeType.FUNCTION_DEFINITION);
 
-        if(this.checkAttributeSpecifierSequence()) {
-            parseAttributeSpecifierSequence(depth + 1);
-        }
-
         if(this.checkDeclSpecifierSequence() && tryParse(() -> {
                 parseDeclSpecifierSequence(depth + 1);
 
@@ -756,7 +752,7 @@ public class SimpleParser implements Parser {
         this.addTreeNode(depth, NodeType.FOR_INIT_STATEMENT);
 
         if(this.checkExpressionStatement()) {
-            parseExpression(depth + 1);
+            parseExpressionStatement(depth + 1);
             return;
         }
 
@@ -2693,11 +2689,8 @@ public class SimpleParser implements Parser {
             if(tryParse(() -> {
                 parseNoptrDeclarator(depth + 1);
                 parseParametersAndQualifiers(depth + 1);
-
-                //TODO: SHOULD THIS BE OPTIONAL? Verify BNF is correct
-                if (this.checkTrailingReturnType()) {
-                    parseTrailingReturnType(depth + 1);
-                }
+                //NOTE: Changed
+                parseTrailingReturnType(depth + 1);
             })) {
                 return;
             }
@@ -2722,29 +2715,10 @@ public class SimpleParser implements Parser {
         parseNoptrDeclarator(depth + 1);
     }
 
-    protected void parseNoptrDeclarator(int depth) throws ParserException {
-        this.addTreeNode(depth, NodeType.NOPTR_DECLARATOR);
-
+    protected void parseNoptrDeclaratorHelper(int depth) throws ParserException {
         //If this case fails it could possibly be next case
         if(this.checkParametersAndQualifiers()) {
-            if(tryParse(() -> {
-                parseParametersAndQualifiers(depth + 1);
-                parseNoptrDeclarator(depth + 1);
-            })) return;
-        }
-
-        if(this.check(TokenKind.OpenParen)) {
-            this.match(depth + 1, TokenKind.OpenParen);
-            parsePtrDeclarator(depth + 1);
-            this.match(depth + 1, TokenKind.CloseParen);
-            return;
-        }
-
-        if(this.checkDeclaratorId()) {
-            parseDeclaratorId(depth + 1);
-            if(this.checkAttributeSpecifierSequence()) {
-                tryParse(() -> parseAttributeSpecifierSequence(depth + 1));
-            }
+            parseParametersAndQualifiers(depth + 1);
             return;
         }
 
@@ -2753,12 +2727,24 @@ public class SimpleParser implements Parser {
             parseConstantExpression(depth + 1);
         }
         this.match(depth + 1, TokenKind.CloseBracket);
-        if(this.checkAttributeSpecifierSequence()) {
-            parseAttributeSpecifierSequence(depth + 1);
+
+        tryParse(() -> parseNoptrDeclaratorHelper(depth + 1));
+    }
+
+    protected void parseNoptrDeclarator(int depth) throws ParserException {
+        this.addTreeNode(depth, NodeType.NOPTR_DECLARATOR);
+
+        if(this.check(TokenKind.OpenParen)) {
+            this.match(depth + 1, TokenKind.OpenParen);
+            parsePtrDeclarator(depth + 1);
+            this.match(depth + 1, TokenKind.CloseParen);
+            tryParse(() -> parseNoptrDeclaratorHelper(depth + 1));
+            return;
         }
-        if(this.checkNoptrDeclarator()) {
-            tryParse(() -> parseNoptrDeclarator(depth + 1));
-        }
+
+        parseDeclaratorId(depth + 1);
+        tryParse(() -> parseNoptrDeclaratorHelper(depth + 1));
+        return;
     }
 
     protected void parseDeclaratorId(int depth) throws ParserException {
@@ -3494,7 +3480,8 @@ public class SimpleParser implements Parser {
                         TokenKind.FloatKeyword,
                         TokenKind.DoubleKeyword,
                         TokenKind.VoidKeyword,
-                        TokenKind.AutoKeyword
+                        TokenKind.AutoKeyword,
+                        TokenKind.BoolKeyword
                 });
     }
 

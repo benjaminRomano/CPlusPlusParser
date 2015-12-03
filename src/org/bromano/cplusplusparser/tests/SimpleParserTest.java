@@ -3,6 +3,7 @@ package org.bromano.cplusplusparser.tests;
 import org.bromano.cplusplusparser.parser.Parser;
 import org.bromano.cplusplusparser.parser.ParserException;
 import org.bromano.cplusplusparser.parser.SimpleParser;
+import org.bromano.cplusplusparser.scanner.ScannerException;
 import org.bromano.cplusplusparser.scanner.SimpleScanner;
 import org.bromano.cplusplusparser.scanner.Token;
 
@@ -22,7 +23,7 @@ public class SimpleParserTest {
     }
 
 
-    public List<Token> getTokens(String code) {
+    public List<Token> getTokens(String code) throws ScannerException {
         return new SimpleScanner(code).lex();
     }
 

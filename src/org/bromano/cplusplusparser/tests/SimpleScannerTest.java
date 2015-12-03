@@ -148,6 +148,24 @@ public class SimpleScannerTest {
                 new Token(TokenKind.EndOfFile)
         }, s.lex());
 
+
+        s.setText("0 1 2 3 4 5 6 7 8 9 10 20");
+        assertTokensMatch(new Token[]{
+                new Token(TokenKind.IntegerLiteral, "0"),
+                new Token(TokenKind.IntegerLiteral, "1"),
+                new Token(TokenKind.IntegerLiteral, "2"),
+                new Token(TokenKind.IntegerLiteral, "3"),
+                new Token(TokenKind.IntegerLiteral, "4"),
+                new Token(TokenKind.IntegerLiteral, "5"),
+                new Token(TokenKind.IntegerLiteral, "6"),
+                new Token(TokenKind.IntegerLiteral, "7"),
+                new Token(TokenKind.IntegerLiteral, "8"),
+                new Token(TokenKind.IntegerLiteral, "9"),
+                new Token(TokenKind.IntegerLiteral, "10"),
+                new Token(TokenKind.IntegerLiteral, "20"),
+                new Token(TokenKind.EndOfFile)
+        }, s.lex());
+
         //Testing hexadecimal integer literals
         s.setText("0xBu 0xBul 0xBull 0xBuL 0xBuLL 0xBU 0xBUl 0xBUll 0xBUL 0xBULL 0xABCDEF0123456789 0x0BZ");
         assertTokensMatch(new Token[]{

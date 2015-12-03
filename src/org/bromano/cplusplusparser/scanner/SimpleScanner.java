@@ -5,6 +5,7 @@ import java.util.*;
 public class SimpleScanner implements Scanner {
     private String text;
     private Map<String, TokenKind> keywordMap;
+    private List<Token> tokens;
     private int pos = 0;
     private int end = 0;
 
@@ -22,6 +23,11 @@ public class SimpleScanner implements Scanner {
         this.text = text;
         this.pos = 0;
         this.end = text.length();
+    }
+
+
+    public List<Token> getTokens() {
+        return this.tokens;
     }
 
     public Map<String, TokenKind> generateKeywordMap() {
@@ -116,8 +122,8 @@ public class SimpleScanner implements Scanner {
         return keywordMap;
     }
 
-    private void error(String message) {
-        throw new RuntimeException(message);
+    private void error(String message) throws ScannerException {
+        throw new ScannerException(message);
     }
 
     public boolean isAMatch(int pos, char[] chars) {
@@ -146,7 +152,7 @@ public class SimpleScanner implements Scanner {
     /*
         NOTE: Will not scan user-defined literals
     */
-    public Token scan() {
+    public Token scan() throws ScannerException {
 
         while(true) {
             String value = "";
@@ -553,12 +559,12 @@ public class SimpleScanner implements Scanner {
                         return new Token(TokenKind.Identifier, identifierOrKeyword);
                     }
 
-                    error("Cannot parse token");
+                    error("Cannot parse token: " + ch);
             }
         }
     }
 
-    private String scanFloatingLiteral() {
+    private String scanFloatingLiteral() throws ScannerException {
         if(!isFloatingLiteral()) {
             return "";
         }
@@ -593,7 +599,7 @@ public class SimpleScanner implements Scanner {
         return sb.toString();
     }
 
-    private String scanExponentPart() {
+    private String scanExponentPart() throws ScannerException {
         if(pos >= end) {
             return "";
         }
@@ -635,10 +641,10 @@ public class SimpleScanner implements Scanner {
         while (lookaheadPos < end) {
             char ch = text.charAt(lookaheadPos);
 
-            if (isWhiteSpace(ch)) {
-                return false;
-            } else if (ch == 'e' || ch == 'E' || ch == '.') {
+            if (ch == 'e' || ch == 'E' || ch == '.') {
                 return true;
+            } else if(!isDecimalDigit(ch)) {
+                return false;
             }
 
             lookaheadPos++;
@@ -654,7 +660,7 @@ public class SimpleScanner implements Scanner {
        return ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == ' ';
     }
 
-    private String scanIdentifier() {
+    private String scanIdentifier() throws ScannerException {
         StringBuilder sb = new StringBuilder();
 
         boolean isFirstCharacter = true;
@@ -694,7 +700,7 @@ public class SimpleScanner implements Scanner {
         return "";
     }
 
-    private String scanCharSequence() {
+    private String scanCharSequence() throws ScannerException {
         if(!isAMatch(pos, "'")) {
            return "";
         }
@@ -752,7 +758,7 @@ public class SimpleScanner implements Scanner {
         return "";
     }
 
-    private String scanString() {
+    private String scanString() throws ScannerException {
         if(!isAMatch(pos, "\"")) {
             return "";
         }
@@ -789,7 +795,7 @@ public class SimpleScanner implements Scanner {
         return sb.toString();
     }
 
-    private String scanSimpleEscapeSequence() {
+    private String scanSimpleEscapeSequence() throws ScannerException {
         if(!isAMatch(pos, "\\")) {
             return "";
         }
@@ -804,7 +810,7 @@ public class SimpleScanner implements Scanner {
         return "";
     }
 
-    private String scanUniversalCharacterName() {
+    private String scanUniversalCharacterName() throws ScannerException {
         StringBuilder sb = new StringBuilder();
 
         if(isAMatch(pos, "\\U")) {
@@ -823,7 +829,7 @@ public class SimpleScanner implements Scanner {
         return sb.toString();
     }
 
-    private String scanRawString() {
+    private String scanRawString() throws ScannerException {
         if (!isAMatch(pos, "R\"")) {
             return "";
         }
@@ -885,7 +891,7 @@ public class SimpleScanner implements Scanner {
         return sb.toString();
     }
 
-    private String scanDCharSequence() {
+    private String scanDCharSequence() throws ScannerException {
         StringBuilder sb = new StringBuilder();
         while (pos < end) {
             char ch = text.charAt(pos);
@@ -944,7 +950,7 @@ public class SimpleScanner implements Scanner {
         return ch >= '0' && ch <= '7';
     }
 
-    private String scanHexDigits(int minCount, boolean scanAsManyAsPossible) {
+    private String scanHexDigits(int minCount, boolean scanAsManyAsPossible) throws ScannerException {
         StringBuilder sb = new StringBuilder();
         int startPos = pos;
 
@@ -998,15 +1004,15 @@ public class SimpleScanner implements Scanner {
         return text.substring(startPos, pos);
     }
 
-    public List<Token> lex() {
-        List<Token> tokens = new ArrayList<>();
+    public List<Token> lex() throws ScannerException {
+        this.tokens = new ArrayList<>();
 
         Token token = scan();
-        tokens.add(token);
+        this.tokens.add(token);
 
         while(token.kind != TokenKind.EndOfFile) {
             token = scan();
-            tokens.add(token);
+            this.tokens.add(token);
         }
 
         return tokens;
